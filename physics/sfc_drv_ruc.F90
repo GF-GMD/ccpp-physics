@@ -69,7 +69,6 @@ module lsm_ruc
 !     im       - integer, horiz dimention and num of used pts      1    !
 !     km       - integer, vertical soil layer dimension            9    !
 !     ps       - real, surface pressure (pa)                       im   !
-!     u1, v1   - real, u/v component of surface layer wind         im   !
 !     t1       - real, surface layer mean temperature (k)          im   !
 !     q1       - real, surface layer mean specific humidity        im   !
 !     soiltyp  - integer, soil type (integer index)                im   !
@@ -86,6 +85,7 @@ module lsm_ruc
 !     prsl1    - real, sfc layer 1 mean pressure (pa)              im   !
 !     prslki   - real, dimensionless exner function at layer 1     im   !
 !     zf       - real, height of bottom layer (m)                  im   !
+!     wind       real, surface layer wind speed (m/s)              im   !
 !     slopetyp - integer, class of sfc slope (integer index)       im   !
 !     shdmin   - real, min fractional coverage of green veg        im   !
 !     shdmax   - real, max fractnl cover of green veg (not used)   im   !
@@ -139,13 +139,13 @@ module lsm_ruc
 ! DH* TODO - make order of arguments the same as in the metadata table
       subroutine lsm_ruc_run                                            & ! inputs
      &     ( iter, me, master, kdt, im, nlev, lsoil_ruc, lsoil, zs,     &
-     &       u1, v1, t1, q1, qc, soiltyp, vegtype, sigmaf, laixy,       &
+     &       t1, q1, qc, soiltyp, vegtype, sigmaf, laixy,               &
      &       sfcemis, dlwflx, dswsfc, snet, delt, tg3, cm, ch,          &
-     &       prsl1, zf, ddvel, shdmin, shdmax, alvwf, alnwf,            &
+     &       prsl1, zf, wind, shdmin, shdmax, alvwf, alnwf,             &
      &       snoalb, sfalb, flag_iter, flag_guess, isot, ivegsrc, fice, &
      &       smc, stc, slc, lsm_ruc, lsm, land, islimsk, rdlai,         &
      &       imp_physics, imp_physics_gfdl, imp_physics_thompson,       &
-     &       smcwlt2, smcref2, wspd, do_mynnsfclay,                     &
+     &       smcwlt2, smcref2, do_mynnsfclay,                           &
      &       con_cp, con_rv, con_rd, con_g, con_pi, con_hvap, con_fvirt,& !  constants
      &       weasd, snwdph, tskin, tskin_ocn,                           & !  in/outs
      &       rainnc, rainc, ice, snow, graupel,                         & ! in
@@ -173,10 +173,10 @@ module lsm_ruc
 
       real (kind=kind_phys), dimension(im,lsoil), intent(inout) :: smc,stc,slc
 
-      real (kind=kind_phys), dimension(im), intent(in) :: u1, v1,&
+      real (kind=kind_phys), dimension(im), intent(in) ::               &
      &       t1, sigmaf, sfcemis, dlwflx, dswsfc, snet, tg3, cm,        &
-     &       ch, prsl1, ddvel, shdmin, shdmax,                          &
-     &       snoalb, alvwf, alnwf, zf, qc, q1, wspd
+     &       ch, prsl1, wind, shdmin, shdmax,                           &
+     &       snoalb, alvwf, alnwf, zf, qc, q1
 
       real (kind=kind_phys), dimension(:), intent(in) :: laixy
 
@@ -220,7 +220,7 @@ module lsm_ruc
 
 !  ---  locals:
       real (kind=kind_phys), dimension(im) :: rch, rho,                 &
-     &       q0, qs1, wind, weasd_old, snwdph_old,                      &
+     &       q0, qs1, weasd_old, snwdph_old,                            &
      &       tprcp_old, srflag_old, tskin_old, canopy_old,              &
      &       tsnow_old, snowfallac_old, acsnow_old, sfalb_old,          &
      &       sfcqv_old, sfcqc_old, wetness_old, zorl_old, sncovr1_old
@@ -478,15 +478,7 @@ module lsm_ruc
 
       do i  = 1, im
         if (flag_iter(i) .and. flag(i)) then
-          !if (do_mynnsfclay) then
-          ! WARNING - used of wspd computed in MYNN sfc leads to massive cooling.
-          !  wind(i) = wspd(i)
-          !else
-            wind(i) = max(sqrt( u1(i)*u1(i) + v1(i)*v1(i) )               &
-                    + max(0.0, min(ddvel(i), 30.0)), 1.0)
-          !endif
           q0(i)   = max(q1(i)/(1.-q1(i)), 1.e-8)   !* q1=specific humidity at level 1 (kg/kg)
-
           rho(i) = prsl1(i) / (con_rd*t1(i)*(1.0+con_fvirt*q0(i)))
           qs1(i) = rslf(prsl1(i),t1(i))  !* qs1=sat. mixing ratio at level 1 (kg/kg)
           q0 (i) = min(qs1(i), q0(i))
@@ -837,7 +829,6 @@ module lsm_ruc
      &          its,ite, jts,jte, kts,kte                                    )
 
         if(debug_print) then
-          !if(me==0 .and. i==ipr) then
           write (0,*)'after sneqv(i,j) =',i,j,sneqv(i,j)
           write (0,*)'after snowh(i,j) =',i,j,snowh(i,j)
           write (0,*)'after sncovr(i,j) =',i,j,sncovr(i,j)

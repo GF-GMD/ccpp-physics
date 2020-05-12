@@ -3,10 +3,10 @@
     module GFS_diagtoscreen
 
       private
- 
+
       public GFS_diagtoscreen_init, GFS_diagtoscreen_run, GFS_diagtoscreen_finalize
 
-      public print_my_stuff, chksum_int, chksum_real
+      public print_my_stuff, chksum_int, chksum_real, print_var
 
 ! Calculating the checksum leads to segmentation faults with gfortran (bug in malloc?),
 ! thus print the sum of the array instead of the checksum.
@@ -130,7 +130,6 @@
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%zorlo'    , Sfcprop%zorlo)
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%zorll'    , Sfcprop%zorll)
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%fice'     , Sfcprop%fice)
-                     call print_var(mpirank,omprank, blkno, 'Sfcprop%hprim'    , Sfcprop%hprim)
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%hprime'   , Sfcprop%hprime)
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%sncovr'   , Sfcprop%sncovr)
                      call print_var(mpirank,omprank, blkno, 'Sfcprop%snoalb'   , Sfcprop%snoalb)
@@ -226,6 +225,7 @@
                      call print_var(mpirank,omprank, blkno, 'Tbd%acv'             , Tbd%acv)
                      call print_var(mpirank,omprank, blkno, 'Tbd%acvb'            , Tbd%acvb)
                      call print_var(mpirank,omprank, blkno, 'Tbd%acvt'            , Tbd%acvt)
+                     call print_var(mpirank,omprank, blkno, 'Tbd%hpbl'            , Tbd%hpbl)
                      if (Model%do_sppt) then
                        call print_var(mpirank,omprank, blkno, 'Tbd%dtdtr'         , Tbd%dtdtr)
                        call print_var(mpirank,omprank, blkno, 'Tbd%dtotprcp'      , Tbd%dtotprcp)
@@ -233,7 +233,9 @@
                        call print_var(mpirank,omprank, blkno, 'Tbd%drain_cpl'     , Tbd%drain_cpl)
                        call print_var(mpirank,omprank, blkno, 'Tbd%dsnow_cpl'     , Tbd%dsnow_cpl)
                      end if
-                     call print_var(mpirank,omprank, blkno, 'Tbd%phy_fctd'        , Tbd%phy_fctd)
+                     if (Model%nctp > 0 .and. Model%cscnv) then
+                       call print_var(mpirank,omprank, blkno, 'Tbd%phy_fctd'      , Tbd%phy_fctd)
+                     end if
                      call print_var(mpirank,omprank, blkno, 'Tbd%phy_f2d'         , Tbd%phy_f2d)
                      call print_var(mpirank,omprank, blkno, 'Tbd%phy_f3d'         , Tbd%phy_f3d)
                      do n=1,size(Tbd%phy_f3d(1,1,:))
@@ -293,7 +295,6 @@
                      call print_var(mpirank,omprank, blkno, 'Diag%dpt2m       ',    Diag%dpt2m)
                      call print_var(mpirank,omprank, blkno, 'Diag%zlvl        ',    Diag%zlvl)
                      call print_var(mpirank,omprank, blkno, 'Diag%psurf       ',    Diag%psurf)
-                     call print_var(mpirank,omprank, blkno, 'Diag%hpbl        ',    Diag%hpbl)
                      call print_var(mpirank,omprank, blkno, 'Diag%pwat        ',    Diag%pwat)
                      call print_var(mpirank,omprank, blkno, 'Diag%t1          ',    Diag%t1)
                      call print_var(mpirank,omprank, blkno, 'Diag%q1          ',    Diag%q1)
@@ -309,6 +310,7 @@
                      call print_var(mpirank,omprank, blkno, 'Diag%tdomzr      ',    Diag%tdomzr)
                      call print_var(mpirank,omprank, blkno, 'Diag%tdomip      ',    Diag%tdomip)
                      call print_var(mpirank,omprank, blkno, 'Diag%tdoms       ',    Diag%tdoms)
+                     ! CCPP/RUC only
                      if (Model%lsm == Model%lsm_ruc) then
                        call print_var(mpirank,omprank, blkno, 'Diag%wet1        ',  Sfcprop%wetness)
                      else
@@ -344,6 +346,7 @@
                      if(Model%lradar) then
                        call print_var(mpirank,omprank, blkno, 'Diag%refl_10cm   ',  Diag%refl_10cm)
                      end if
+                     ! CCPP/MYNNPBL only
                      if (Model%do_mynnedmf) then
                        call print_var(mpirank,omprank, blkno, 'Diag%edmf_a      ',  Diag%edmf_a)
                        call print_var(mpirank,omprank, blkno, 'Diag%edmf_w      ',  Diag%edmf_w)
@@ -353,7 +356,7 @@
                        call print_var(mpirank,omprank, blkno, 'Diag%edmf_qc     ',  Diag%edmf_qc)
                        call print_var(mpirank,omprank, blkno, 'Diag%nupdraft    ',  Diag%nupdraft)
                        call print_var(mpirank,omprank, blkno, 'Diag%maxMF       ',  Diag%maxMF)
-                       call print_var(mpirank,omprank, blkno, 'Diag%ktop_shallow',  Diag%ktop_shallow)
+                       call print_var(mpirank,omprank, blkno, 'Diag%ktop_plume  ',  Diag%ktop_plume)
                        call print_var(mpirank,omprank, blkno, 'Diag%exch_h      ',  Diag%exch_h)
                        call print_var(mpirank,omprank, blkno, 'Diag%exch_m      ',  Diag%exch_m)
                      end if
@@ -397,7 +400,7 @@
                      call print_var(mpirank,omprank, blkno, 'Coupling%sfcdsw ', Coupling%sfcdsw )
                      call print_var(mpirank,omprank, blkno, 'Coupling%sfcnsw ', Coupling%sfcnsw )
                      call print_var(mpirank,omprank, blkno, 'Coupling%sfcdlw ', Coupling%sfcdlw )
-                     if (Model%cplflx .or. Model%do_sppt) then
+                     if (Model%cplflx .or. Model%do_sppt .or. Model%cplchm) then
                         call print_var(mpirank,omprank, blkno, 'Coupling%rain_cpl', Coupling%rain_cpl)
                         call print_var(mpirank,omprank, blkno, 'Coupling%snow_cpl', Coupling%snow_cpl)
                      end if
@@ -453,10 +456,10 @@
                         call print_var(mpirank,omprank, blkno, 'Coupling%psurfi_cpl  ', Coupling%psurfi_cpl   )
                      end if
                      if (Model%cplchm) then
-                        call print_var(mpirank,omprank, blkno, 'Coupling%rain_cpl ', Coupling%rain_cpl )
                         call print_var(mpirank,omprank, blkno, 'Coupling%rainc_cpl', Coupling%rainc_cpl)
                         call print_var(mpirank,omprank, blkno, 'Coupling%ushfsfci ', Coupling%ushfsfci )
                         call print_var(mpirank,omprank, blkno, 'Coupling%dkt      ', Coupling%dkt      )
+                        call print_var(mpirank,omprank, blkno, 'Coupling%dqdti    ', Coupling%dqdti    )
                      end if
                      if (Model%do_sppt) then
                         call print_var(mpirank,omprank, blkno, 'Coupling%sppt_wts', Coupling%sppt_wts)
@@ -470,14 +473,6 @@
                      end if
                      if (Model%do_sfcperts) then
                         call print_var(mpirank,omprank, blkno, 'Coupling%sfc_wts', Coupling%sfc_wts)
-                     end if
-                     if (Model%lgocart .or. Model%ldiag3d) then
-                        call print_var(mpirank,omprank, blkno, 'Coupling%dqdti  ', Coupling%dqdti  )
-                        call print_var(mpirank,omprank, blkno, 'Coupling%cnvqci ', Coupling%cnvqci )
-                        call print_var(mpirank,omprank, blkno, 'Coupling%upd_mfi', Coupling%upd_mfi)
-                        call print_var(mpirank,omprank, blkno, 'Coupling%dwn_mfi', Coupling%dwn_mfi)
-                        call print_var(mpirank,omprank, blkno, 'Coupling%det_mfi', Coupling%det_mfi)
-                        call print_var(mpirank,omprank, blkno, 'Coupling%cldcovi', Coupling%cldcovi)
                      end if
                      if(Model%imp_physics == Model%imp_physics_thompson .and. Model%ltaerosol) then
                         call print_var(mpirank,omprank, blkno, 'Coupling%nwfa2d', Coupling%nwfa2d)
@@ -617,7 +612,7 @@
           integer, intent(in) :: mpirank, omprank, blkno
           character(len=*), intent(in) :: name
           real(kind_phys), intent(in) :: var(:,:)
-          
+
           integer :: k, i
 
 #ifdef PRINT_SUM
@@ -744,7 +739,7 @@
     module GFS_interstitialtoscreen
 
       private
- 
+
       public GFS_interstitialtoscreen_init, GFS_interstitialtoscreen_run, GFS_interstitialtoscreen_finalize
 
       contains
@@ -856,7 +851,7 @@
     module GFS_abort
 
       private
- 
+
       public GFS_abort_init, GFS_abort_run, GFS_abort_finalize
 
       contains
@@ -900,7 +895,7 @@
     module GFS_checkland
 
         private
- 
+
         public GFS_checkland_init, GFS_checkland_run, GFS_checkland_finalize
 
         contains

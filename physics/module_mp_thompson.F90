@@ -80,7 +80,7 @@ MODULE module_mp_thompson
 !.. scheme.  In 2-moment cloud water, Nt_c represents a maximum of
 !.. droplet concentration and nu_c is also variable depending on local
 !.. droplet number concentration.
-      REAL, PARAMETER, PRIVATE:: Nt_c = 100.E6
+      REAL, PARAMETER :: Nt_c = 100.E6
       REAL, PARAMETER, PRIVATE:: Nt_c_max = 1999.E6
 
 !..Declaration of constants for assumed CCN/IN aerosols when none in
@@ -410,23 +410,22 @@ MODULE module_mp_thompson
 !! lookup tables in Thomspson scheme.
 !>\section gen_thompson_init thompson_init General Algorithm
 !> @{
-      SUBROUTINE thompson_init(nwfa2d, nifa2d, nwfa, nifa,  &
-                          ids, ide, jds, jde, kds, kde,     &
-                          ims, ime, jms, jme, kms, kme,     &
-                          its, ite, jts, jte, kts, kte,     &
-                          mpicomm, mpirank, mpiroot,        &
-                          threads, errmsg, errflg)
+      SUBROUTINE thompson_init(nwfa2d, nifa2d, nwfa, nifa, &
+                               mpicomm, mpirank, mpiroot,  &
+                               threads, errmsg, errflg)
 
       IMPLICIT NONE
 
-      INTEGER, INTENT(IN):: ids,ide, jds,jde, kds,kde, &
-                            ims,ime, jms,jme, kms,kme, &
-                            its,ite, jts,jte, kts,kte
-
 !..OPTIONAL variables that control application of aerosol-aware scheme
 
-      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), OPTIONAL, INTENT(IN) :: nwfa, nifa
-      REAL, DIMENSION(ims:ime,jms:jme),         OPTIONAL, INTENT(IN) :: nwfa2d, nifa2d
+#if 0
+      REAL, DIMENSION(:,:,:), OPTIONAL, INTENT(IN) :: nwfa, nifa
+      REAL, DIMENSION(:,:),   OPTIONAL, INTENT(IN) :: nwfa2d, nifa2d
+#else
+! DH* 20200208 - change dimensions for nasty init hack
+      REAL, DIMENSION(:,:), OPTIONAL, INTENT(IN) :: nwfa, nifa
+      REAL, DIMENSION(:),   OPTIONAL, INTENT(IN) :: nwfa2d, nifa2d
+#endif
       INTEGER, INTENT(IN) :: mpicomm, mpirank, mpiroot
       INTEGER, INTENT(IN) :: threads
       CHARACTER(len=*), INTENT(INOUT) :: errmsg
@@ -924,11 +923,6 @@ MODULE module_mp_thompson
 
       call cpu_time(stime)
 
-!$OMP parallel num_threads(threads)
-
-!$OMP sections
-
-!$OMP section
 !>  - Call qr_acr_qg() to create rain collecting graupel & graupel collecting rain table
       if (mpirank==mpiroot) write(0,*) '  creating rain collecting graupel table'
       call cpu_time(stime)
@@ -936,17 +930,12 @@ MODULE module_mp_thompson
       call cpu_time(etime)
       if (mpirank==mpiroot) print '("Computing rain collecting graupel table took ",f10.3," seconds.")', etime-stime
 
-!$OMP section
 !>  - Call qr_acr_qs() to create rain collecting snow & snow collecting rain table
       if (mpirank==mpiroot) write (*,*) '  creating rain collecting snow table'
       call cpu_time(stime)
       call qr_acr_qs
       call cpu_time(etime)
       if (mpirank==mpiroot) print '("Computing rain collecting snow table took ",f10.3," seconds.")', etime-stime
-
-!$OMP end sections
-
-!$OMP end parallel
 
 !>  - Call freezeh2o() to create cloud water and rain freezing (Bigg, 1953) table
       if (mpirank==mpiroot) write(0,*) '  creating freezing of water drops table'
@@ -1302,7 +1291,7 @@ MODULE module_mp_thompson
              kmax_qc = k
              qc_max = qc1d(k)
             elseif (qc1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qc ', qc1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qc ', qc1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (qr1d(k) .gt. qr_max) then
@@ -1311,7 +1300,7 @@ MODULE module_mp_thompson
              kmax_qr = k
              qr_max = qr1d(k)
             elseif (qr1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qr ', qr1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qr ', qr1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (nr1d(k) .gt. nr_max) then
@@ -1320,7 +1309,7 @@ MODULE module_mp_thompson
              kmax_nr = k
              nr_max = nr1d(k)
             elseif (nr1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative nr ', nr1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative nr ', nr1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (qs1d(k) .gt. qs_max) then
@@ -1329,7 +1318,7 @@ MODULE module_mp_thompson
              kmax_qs = k
              qs_max = qs1d(k)
             elseif (qs1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qs ', qs1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qs ', qs1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (qi1d(k) .gt. qi_max) then
@@ -1338,7 +1327,7 @@ MODULE module_mp_thompson
              kmax_qi = k
              qi_max = qi1d(k)
             elseif (qi1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qi ', qi1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qi ', qi1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (qg1d(k) .gt. qg_max) then
@@ -1347,7 +1336,7 @@ MODULE module_mp_thompson
              kmax_qg = k
              qg_max = qg1d(k)
             elseif (qg1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qg ', qg1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qg ', qg1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (ni1d(k) .gt. ni_max) then
@@ -1356,11 +1345,11 @@ MODULE module_mp_thompson
              kmax_ni = k
              ni_max = ni1d(k)
             elseif (ni1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative ni ', ni1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative ni ', ni1d(k),        &
                         ' at i,j,k=', i,j,k
             endif
             if (qv1d(k) .lt. 0.0) then
-             write(*,*) 'WARNING, negative qv ', qv1d(k),        &
+             write(*,'(a,e16.7,a,3i8)') 'WARNING, negative qv ', qv1d(k),        &
                         ' at i,j,k=', i,j,k
              if (k.lt.kte-2 .and. k.gt.kts+1) then
                 write(*,*) '   below and above are: ', qv(i,k-1,j), qv(i,k+1,j)
