@@ -365,8 +365,6 @@ contains
      !evfact=.0   ! for 4F5f
      !evfactl=.4 
 
-     print*,'hli with 2020 latest GF'
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 !proportionality constant to estimate pressure gradient of updraft (zhang and wu, 2003, jas
