@@ -362,7 +362,8 @@
                                         imp_physics_mg, ntgl, imp_physics_gfdl, &
                                         imp_physics_zhao_carr, kk,              &
                                         errmsg, errflg)
-          if (.not.errflg==1) return
+         !if (.not.errflg==1) return
+          if (errflg==1) return
           !
           k1 = kk
           do n=ntchs,ntchm+ntchs-1
