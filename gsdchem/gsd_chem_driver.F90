@@ -67,7 +67,7 @@ contains
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
                    gq0,ebu,tile_num,                                    &
-                   cplchm_rad_opt,faersw_cpl,                           &
+                   cplchm_rad_opt,lmk,faersw_cpl,                       &
                    errmsg,errflg)
 
     implicit none
@@ -99,6 +99,7 @@ contains
                 us3d, vs3d, spechum, w, exch, dqdt
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_ebu), intent(inout) :: ebu
+    integer,        intent(in) :: lmk
     real(kind_phys), dimension(im, lmk, 14, 3),intent(inout) :: faersw_cpl
     logical, intent(in) :: cplchm_rad_opt
 !    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
