@@ -66,7 +66,8 @@ contains
                    ntbc1,ntbc2,ntoc1,ntoc2,                             &
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
-                   gq0,ebu,tile_num,tmpmax,                             &
+                   gq0,ebu,tile_num,                                    &
+                   cplchm_rad_opt,faersw_cpl,                           &
                    errmsg,errflg)
 
     implicit none
@@ -90,7 +91,6 @@ contains
     real(kind_phys), dimension(im,64, 3), intent(in) :: emi2_in
     real(kind_phys), dimension(im,    5), intent(in) :: fire_GBBEPx
     real(kind_phys), dimension(im,   13), intent(in) :: fire_MODIS
-    real(kind_phys), dimension(im), intent(inout) :: tmpmax
     real(kind_phys), dimension(im), intent(in) :: u10m, v10m, ustar,              &
                 garea, rlat,rlon, tskin, rain_cpl, rainc_cpl,                     &
                 hf2d, pb2d, sigmaf, dswsfc, zorl, snow_cpl, xcosz
@@ -99,6 +99,8 @@ contains
                 us3d, vs3d, spechum, w, exch, dqdt
     real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_ebu), intent(inout) :: ebu
+    real(kind_phys), dimension(im, lmk, 14, 3),intent(inout) :: faersw_cpl
+    logical, intent(in) :: cplchm_rad_opt
 !    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
     character(len=*), intent(out) :: errmsg
     integer,          intent(out) :: errflg
@@ -571,10 +573,20 @@ contains
           end do
         end do
         aod2d(its:ite) = aod(its:ite,1)
-        tmpmax(its:ite) = aod2d(its:ite)
       end if
     endif
-!    print*,'hli aod2d',maxval(tmpmax)
+!>---- feedback to radiation
+    if (cplchm_rad_opt) then
+     do nv = 1, nbands
+      do k = kts, kte
+       do i = its, ite
+        faersw_cpl(i,k,nv,1) =  ext_cof(i,k,nv)
+        faersw_cpl(i,k,nv,2) =  sscal  (i,k,nv)
+        faersw_cpl(i,k,nv,3) =  asymp  (i,k,nv)
+       end do
+      end do
+     end do
+    endif
 
     call sum_pm_gocart (                                                &
          rri, chem,pm2_5_dry, pm2_5_dry_ec, pm10,                       &

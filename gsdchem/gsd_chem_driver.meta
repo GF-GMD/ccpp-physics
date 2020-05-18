@@ -608,14 +608,22 @@
   type = integer
   intent = in
   optional = F
-[tmpmax]
-  standard_name = maximum_temperature_at_2m
-  long_name = max temperature at 2m height
-  units = K
-  dimensions = (horizontal_dimension)
+[cplchm_rad_opt]
+  standard_name = flag_for_chemistry_coupling_radiation_feedback
+  long_name = flag controlling cplchm radiation feedback (default off)
+  units = flag
+  dimensions = ()
+  type = logical
+  intent = in
+  optional = F
+[faersw_cpl]
+  standard_name = gsdchem_aerosol_optical_properties_for_shortwave_bands_01_14
+  long_name = gsdchem aerosol optical properties for shortwave bands 01-14
+  units = various
+  dimensions = (horizontal_dimension,adjusted_vertical_layer_dimension_for_radiation,14,3)
   type = real
   kind = kind_phys
-  intent = inout
+  intent = in
   optional = F
 [errmsg]
   standard_name = ccpp_error_message
