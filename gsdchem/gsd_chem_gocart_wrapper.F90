@@ -1,23 +1,365 @@
- module gsd_chem_prep
+!>\file gsd_chem_gocart_wrapper.F90
+!! This file is GSD Chemistry gocart wrapper with CCPP coupling to FV3
+!! Haiqin.Li@noaa.gov 06/2020
 
-  use machine ,       only : kind_phys
-  use physcons, g => con_g, pi => con_pi
-  use gsd_chem_config
-  use plume_data_mod
+ module gsd_chem_gocart_wrapper
 
-  implicit none
+   use physcons,        only : g => con_g, pi => con_pi
+   use machine ,        only : kind_phys
+   use gsd_chem_config
+!   use dep_dry_mod
+!   use dep_wet_ls_mod
+!   use gocart_settling_mod
+   use gocart_aerosols_mod
+!   use gocart_dmsemis_mod
+   use gocart_chem_mod
+!   use opt_mod
+!   use seas_mod,        only : gocart_seasalt_driver
+!   use dust_gocart_mod, only : gocart_dust_driver
+!   use dust_afwa_mod,   only : gocart_dust_afwa_driver
+!   use dust_fengsha_mod,only : gocart_dust_fengsha_driver
+   use dust_data_mod
+!   use plume_rise_mod
+!   use vash_settling_mod
 
+   implicit none
+
+   private
+
+   public :: gsd_chem_gocart_wrapper_init, gsd_chem_gocart_wrapper_run, gsd_chem_gocart_wrapper_finalize
 
 contains
 
-  subroutine gsd_chem_prep_run(                                        &
+!> \brief Brief description of the subroutine
+!!
+      subroutine gsd_chem_gocart_wrapper_init()
+      end subroutine gsd_chem_gocart_wrapper_init
+
+!> \brief Brief description of the subroutine
+!!
+!! \section arg_table_gsd_chem_gocart_wrapper_finalize Argument Table
+!!
+      subroutine gsd_chem_gocart_wrapper_finalize()
+      end subroutine gsd_chem_gocart_wrapper_finalize
+
+!> \defgroup gsd_chem_group GSD Chem driver Module
+!! This is the gsd chemistry
+!>\defgroup gsd_chem_gocart_wrapper GSD Chem driver Module  
+!> \ingroup gsd_chem_group
+!! This is the GSD Chem driver Module
+!! \section arg_table_gsd_chem_gocart_wrapper_run Argument Table
+!! \htmlinclude gsd_chem_gocart_wrapper_run.html
+!!
+!>\section gsd_chem_gocart_wrapper GSD Chemistry Scheme General Algorithm
+!> @{
+    subroutine gsd_chem_gocart_wrapper_run(im, kte, kme, ktau, dt, garea, land, &
+                   u10m, v10m, ustar, rlat, rlon, tskin,julian,xcosz,   &
+                   rain_cpl, rainc_cpl, hf2d, pb2d,                     &
+                   pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,  &
+                   w, exch, dqdt,                                       &
+                   nsoil, smc, vegtype, soiltyp, sigmaf,jdate,idat,     & 
+                   dswsfc, zorl,snow_cpl,                               &
+                   emi2_in,       &
+                   nseasalt,ntrac,                                      &
+                   ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                     &
+                   ntbc1,ntbc2,ntoc1,ntoc2,                             &
+                   ntss1,ntss2,ntss3,ntss4,ntss5,                       &
+                   ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
+                   gq0,tile_num,                                    &
+                   cplchm_rad_opt,lmk,faersw_cpl,                       &
+                   errmsg,errflg)
+
+    implicit none
+
+
+    integer,        intent(in) :: im,kte,kme,ktau,nsoil,jdate(8),idat(8),tile_num
+    integer,        intent(in) :: nseasalt,ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
+    integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
+    integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
+    integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
+    real(kind_phys),intent(in) :: dt,julian
+
+    integer, parameter :: ids=1,jds=1,jde=1, kds=1
+    integer, parameter :: ims=1,jms=1,jme=1, kms=1
+    integer, parameter :: its=1,jts=1,jte=1, kts=1
+
+    integer, dimension(im), intent(in) :: land, vegtype, soiltyp        
+    real(kind_phys), dimension(im,nsoil), intent(in) :: smc
+    real(kind_phys), dimension(im,64, 3), intent(in) :: emi2_in
+    real(kind_phys), dimension(im), intent(in) :: u10m, v10m, ustar,              &
+                garea, rlat,rlon, tskin, rain_cpl, rainc_cpl,                     &
+                hf2d, pb2d, sigmaf, dswsfc, zorl, snow_cpl, xcosz
+    real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
+    real(kind_phys), dimension(im,kte), intent(in) :: phl3d, prl3d, tk3d,        &
+                us3d, vs3d, spechum, w, exch, dqdt
+    real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
+    integer,        intent(in) :: lmk
+    real(kind_phys), dimension(im, lmk, 14, 3),intent(inout) :: faersw_cpl
+    logical, intent(in) :: cplchm_rad_opt
+!    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
+    character(len=*), intent(out) :: errmsg
+    integer,          intent(out) :: errflg
+
+!   integer, parameter :: num_moist=3, num_chem=20, num_emis_seas=5, num_emis_dust=5
+    real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: rri, t_phy, u_phy, v_phy,       &
+                     p_phy, z_at_w, dz8w, p8w, t8w, rho_phy, vvel, zmid,        &
+                     exch_h, dqdti
+
+    real(kind_phys), dimension(ims:im, jms:jme) :: u10, v10, ust, tsk,            &
+                     xland, xlat, xlong, dxy, rcav, rnav, hfx, pbl
+
+!>- sea salt & chemistry variables
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_moist)  :: moist 
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_chem )  :: chem
+    real(kind_phys), dimension(ims:im, jms:jme, 1:num_chem )  ::                  &
+                     var_rmv, dry_fall, tr_fall, sedim
+    real(kind_phys), dimension(ims:im, 1, jms:jme, 1:num_emis_seas  ) :: emis_seas
+    real(kind_phys), dimension(ims:im, jms:jme) :: seashelp
+
+    integer :: ide, ime, ite, kde, julday
+
+!   integer, parameter :: SEAS_OPT_DEFAULT = 1
+    integer, parameter :: chem_in_opt = 0  ! 0 for coldstart, 1 for restart
+    logical, parameter :: readrestart = .false.
+    integer, parameter :: nvl_gocart  = 64  ! number of input levels from gocart file
+   
+!>- dust & chemistry variables
+    real(kind_phys), dimension(ims:im, jms:jme) :: vegfrac, rmol, gsw, znt
+    real(kind_phys), dimension(ims:im, nsoil, jms:jme) :: smois
+    real(kind_phys), dimension(ims:im, 1:1, jms:jme, 1:num_emis_dust) :: emis_dust
+    real(kind_phys), dimension(ims:im, 1:1, jms:jme, 1:5)             :: srce_dust
+    real(kind_phys), dimension(ims:im, jms:jme) :: dusthelp
+    integer,         dimension(ims:im, jms:jme) :: isltyp, ivgtyp
+
+    integer :: current_month
+
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: pm10, pm2_5_dry, pm2_5_dry_ec
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: ac3, ahno3, anh3, asulf, cor3, h2oai, h2oaj, nu3
+    real(kind_phys), dimension(ims:im, jms:jme) :: dep_vel_o3, e_co, ash_fall
+
+!>- chemical background variables
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: backg_oh,backg_h2o2,backg_no3
+
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: oh_t, h2o2_t, no3_t
+    real(kind_phys), dimension(ims:im, jms:jme) :: ttday, tcosz
+
+!>- optical variables
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: relhum
+    real(kind_phys), dimension(ims:im,         jms:jme) :: aod
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:nbands) :: extt
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:nbands) :: ssca
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:nbands) :: asympar
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:4) ::                  &
+        tauaersw, gaersw, waersw, bscoefsw,                                        &
+        l2aer,  l3aer, l4aer, l5aer, l6aer, l7aer           
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:16) :: tauaerlw
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_ext_coef) :: ext_coeff
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_bscat_coef) :: bscat_coeff
+    real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_asym_par)   :: asym_par
+!>- optical variables
+    real(kind_phys), dimension(im) :: aod2d
+    real(kind_phys), dimension(im, kte, 1:nbands) :: ext_cof, sscal, asymp
+
+!>- plume variables
+    ! -- buffers
+    real(kind_phys) :: dtstep, gmt
+    real(kind_phys), dimension(1:num_chem) :: ppm2ugkg
+
+    ! -- output tracers
+    real(kind_phys), dimension(ims:im, jms:jme, 1:num_chem) :: wet_dep
+!*  real(kind_phys), dimension(ims:im, jms:jme, 1:nvl, 1:nbands) :: ext_cof, sscal, asymp
+    real(kind_phys), dimension(ims:im, jms:jme, 1:kme) :: p10, pm25!, ebu_oc 
+    real(kind_phys), dimension(ims:im, jms:jme, 1:kme) :: oh_bg, h2o2_bg, no3_bg
+
+
+!>-- local variables
+    real(kind_phys) :: curr_secs
+    real(kind_phys) :: factor, factor2, factor3
+    logical :: call_gocart, call_radiation
+    logical :: store_arrays
+    integer :: nbegin, nv, nvv
+    integer :: i, j, jp, k, kp, n
+  
+
+    errmsg = ''
+    errflg = 0
+
+!    print*,'hli test1 ktau',ktau
+    h2oai = 0.
+    h2oaj = 0.
+    nu3   = 0.
+    ac3   = 0.
+    cor3  = 0.
+    asulf = 0.
+    ahno3 = 0.
+    anh3  = 0.
+    e_co  = 0.
+    dep_vel_o3 = 0.
+    ash_fall   = 0.
+    extt =0.
+    ssca   =0.
+    asympar=0.
+
+
+    gmt = real(idat(5))
+    julday = real(julian)                                       
+
+    current_month=jdate(2)
+    curr_secs = ktau * dt
+
+    ! -- set domain
+    ide=im 
+    ime=im
+    ite=im
+    kde=kte
+
+    ! -- volume to mass fraction conversion table (ppm -> ug/kg)
+    ppm2ugkg         = 1._kind_phys
+   !ppm2ugkg(p_so2 ) = 1.e+03_kind_phys * mw_so2_aer / mwdry
+    ppm2ugkg(p_sulf) = 1.e+03_kind_phys * mw_so4_aer / mwdry
+
+    ! -- set control flags
+    call_gocart      = (mod(ktau, call_chemistry) == 0) .or. (ktau == 1)
+    call_radiation   = (mod(int(curr_secs), max(1, 60*aer_ra_frq)) == 0) .or. (ktau == 1)
+
+    ! -- compute accumulated large-scale and convective rainfall since last call
+    if (ktau > 1) then
+      dtstep = call_chemistry * dt
+    else
+      dtstep = dt
+     ! -- initialize buffers
+!      ebu   = 0._kind_phys
+    end if
+
+    ! -- compute incremental convective and large-scale rainfall
+    do i=its,ite
+     rcav(i,1)=max(rainc_cpl(i)*1000.              , 0.) ! meter to mm
+     rnav(i,1)=max((rain_cpl(i)-rainc_cpl(i))*1000., 0.) ! meter to mm
+    enddo
+
+!!!
+
+!>- get ready for chemistry run
+!   print*,'GSD vegtype,soiltyp,sigmaf',vegtype,soiltyp,sigmaf
+    call gsd_chem_gocart_prep(                                             &
+        readrestart,chem_in_opt,ktau,dtstep,xcosz,                      &
+        u10m,v10m,ustar,land,garea,rlat,rlon,tskin,                     &
+        pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,                 &
+        exch,dqdt,                                                      &
+        nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                   &
+        snow_cpl,emi2_in,                                &
+        hf2d,pb2d,                               &
+        u10,v10,ust,tsk,xland,xlat,xlong,dxy,                           &
+        rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                   &
+        t8w,exch_h,dqdti,                                               &
+        z_at_w,vvel,zmid,                                               &
+        ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                                &
+        ntbc1,ntbc2,ntoc1,ntoc2,                                        &
+        ntss1,ntss2,ntss3,ntss4,ntss5,                                  &
+        ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                 &
+        ntrac,gq0,                                                      &
+        num_chem, num_moist,                                 &
+        call_gocart,nvl_gocart,                                         &
+        ttday,tcosz,gmt,julday,                                         &
+        backg_oh,backg_h2o2,backg_no3,                                  &
+        ppm2ugkg,                                              &
+        moist,chem,                                   &
+        smois,ivgtyp,isltyp,vegfrac,rmol,gsw,znt,hfx,pbl,               &
+        relhum,             &
+        ids,ide, jds,jde, kds,kde,                                      &
+        ims,ime, jms,jme, kms,kme,                                      &
+        its,ite, jts,jte, kts,kte)
+!    print*,'hli test2 ktau',ktau
+
+    if (call_gocart) then
+      call gocart_chem_driver(ktau,dt,dtstep,gmt,julday,xcosz,          &
+           t_phy,moist,chem,rho_phy,dz8w,p8w,backg_oh,oh_t,             &
+           backg_h2o2,h2o2_t,backg_no3,no3_t,                           &
+           dxy,g,xlat,xlong,ttday,tcosz,                             &
+           chem_opt,num_chem,num_moist,                                 &
+           ids,ide, jds,jde, kds,kde,                                   &
+           ims,ime, jms,jme, kms,kme,                                   &
+           its,ite, jts,jte, kts,kte                        )
+      call gocart_aerosols_driver(ktau,dtstep,t_phy,moist,              &
+           chem,rho_phy,dz8w,p8w,dxy,g,                              &
+           chem_opt,num_chem,num_moist,                                 &
+           ids,ide, jds,jde, kds,kde,                                   &
+           ims,ime, jms,jme, kms,kme,                                   &
+           its,ite, jts,jte, kts,kte                        )
+    endif
+
+    call sum_pm_gocart (                                                &
+         rri, chem,pm2_5_dry, pm2_5_dry_ec, pm10,                       &
+         num_chem,chem_opt,                                             &
+         ids,ide, jds,jde, kds,kde,                                     &
+         ims,ime, jms,jme, kms,kme,                                     &
+         its,ite, jts,jte, kts,kte)
+
+    ! -- pm25 and pm10 for output , not for tracer options
+    do j = jts, jte
+      do k = kts, kte
+        do i = its, ite
+          pm25  (i,j,k) = pm2_5_dry(i,k,j)
+          p10   (i,j,k) = pm10     (i,k,j)
+          !ebu_oc(i,j,k) = ebu      (i,k,j,p_ebu_oc)
+        end do
+      end do
+    end do
+
+    if (call_gocart) then
+      do j = jts, jte
+        do k = kts, kte
+          do i = its, ite
+            oh_bg  (i,j,k) = max(0., oh_t  (i,k,j))
+            h2o2_bg(i,j,k) = max(0., h2o2_t(i,k,j))
+            no3_bg (i,j,k) = max(0., no3_t (i,k,j))
+          end do
+        end do
+      end do
+    end if
+
+
+    ! -- put chem stuff back into tracer array
+    do k=kts,kte
+     do i=its,ite
+       gq0(i,k,ntso2  )=ppm2ugkg(p_so2   ) * max(epsilc,chem(i,k,1,p_so2))
+       gq0(i,k,ntsulf )=ppm2ugkg(p_sulf  ) * max(epsilc,chem(i,k,1,p_sulf))
+       gq0(i,k,ntdms  )=ppm2ugkg(p_dms   ) * max(epsilc,chem(i,k,1,p_dms)) 
+       gq0(i,k,ntmsa  )=ppm2ugkg(p_msa   ) * max(epsilc,chem(i,k,1,p_msa))
+       gq0(i,k,ntpp25 )=ppm2ugkg(p_p25   ) * max(epsilc,chem(i,k,1,p_p25))
+       gq0(i,k,ntbc1  )=ppm2ugkg(p_bc1   ) * max(epsilc,chem(i,k,1,p_bc1))
+       gq0(i,k,ntbc2  )=ppm2ugkg(p_bc2   ) * max(epsilc,chem(i,k,1,p_bc2))
+       gq0(i,k,ntoc1  )=ppm2ugkg(p_oc1   ) * max(epsilc,chem(i,k,1,p_oc1))
+       gq0(i,k,ntoc2  )=ppm2ugkg(p_oc2   ) * max(epsilc,chem(i,k,1,p_oc2))
+       gq0(i,k,ntdust1)=ppm2ugkg(p_dust_1) * max(epsilc,chem(i,k,1,p_dust_1))
+       gq0(i,k,ntdust2)=ppm2ugkg(p_dust_2) * max(epsilc,chem(i,k,1,p_dust_2))
+       gq0(i,k,ntdust3)=ppm2ugkg(p_dust_3) * max(epsilc,chem(i,k,1,p_dust_3))
+       gq0(i,k,ntdust4)=ppm2ugkg(p_dust_4) * max(epsilc,chem(i,k,1,p_dust_4))
+       gq0(i,k,ntdust5)=ppm2ugkg(p_dust_5) * max(epsilc,chem(i,k,1,p_dust_5))
+       gq0(i,k,ntss1  )=ppm2ugkg(p_seas_1) * max(epsilc,chem(i,k,1,p_seas_1))
+       gq0(i,k,ntss2  )=ppm2ugkg(p_seas_2) * max(epsilc,chem(i,k,1,p_seas_2))
+       gq0(i,k,ntss3  )=ppm2ugkg(p_seas_3) * max(epsilc,chem(i,k,1,p_seas_3))
+       gq0(i,k,ntss4  )=ppm2ugkg(p_seas_4) * max(epsilc,chem(i,k,1,p_seas_4))
+       gq0(i,k,ntss5  )=ppm2ugkg(p_seas_5) * max(epsilc,chem(i,k,1,p_seas_5))
+       gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
+     enddo
+    enddo
+
+!    print*,'hli test3 ktau',ktau
+!   call gsd_chem_post() ! postprocessing for diagnostics
+
+!
+   end subroutine gsd_chem_gocart_wrapper_run
+!> @}
+
+  subroutine gsd_chem_gocart_prep(                                        &
         readrestart,chem_in_opt,ktau,dtstep,xcosz,                     &
         u10m,v10m,ustar,land,garea,rlat,rlon,ts2d,                     &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,                &
         exch,dqdt,                                                     &
         nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                  &
-        snow_cpl,dust_in,emi_in,emi2_in,                               &
-        fire_GBBEPx,fire_MODIS,hf2d,pb2d,                              &
+        snow_cpl,emi2_in,                               &
+        hf2d,pb2d,                              &
         u10,v10,ust,tsk,xland,xlat,xlong,dxy,                          &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                  &
         t8w,exch_h,dqdti,                                              &
@@ -27,17 +369,14 @@ contains
         ntss1,ntss2,ntss3,ntss4,ntss5,                                 &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                &
         ntrac,gq0,                                                     &
-        num_chem, num_moist,num_ebu_in,                                &
+        num_chem, num_moist,                                &
         call_gocart,nvl_gocart,                                        &
         ttday,tcosz,gmt,julday,                                        &
         backg_oh,backg_h2o2,backg_no3,                                 &
-        plumerise_flag,num_plume_data,num_emis_ant,                    &
-        emis_ant,ppm2ugkg,                                             &
-        mean_fct_agtf,mean_fct_agef,mean_fct_agsv,mean_fct_aggr,       &
-        firesize_agtf,firesize_agef,firesize_agsv,firesize_aggr,       &
-        moist,chem,plumedist,ebu_in,                                   &
+        ppm2ugkg,                                             &
+        moist,chem,                                   &
         smois,ivgtyp,isltyp,vegfrac,rmol,gsw,znt,hfx,pbl,              &
-        relhum,snowh,clayf,rdrag,sandf,ssm,uthr,dms_0,erod,            &
+        relhum,            &
         ids,ide, jds,jde, kds,kde,                                     &
         ims,ime, jms,jme, kms,kme,                                     &
         its,ite, jts,jte, kts,kte)
@@ -58,11 +397,7 @@ contains
          u10m, v10m, ustar, garea, rlat, rlon, ts2d, sigmaf, dswsfc,       &
          zorl, snow_cpl, hf2d, pb2d,xcosz
     real(kind=kind_phys), dimension(ims:ime, nsoil),   intent(in) :: smc 
-    real(kind=kind_phys), dimension(ims:ime,     5),   intent(in) :: dust_in
-    real(kind=kind_phys), dimension(ims:ime,    10),   intent(in) :: emi_in
     real(kind=kind_phys), dimension(ims:ime, 64, 3),   intent(in) :: emi2_in
-    real(kind=kind_phys), dimension(ims:ime,     5),   intent(in) :: fire_GBBEPx
-    real(kind=kind_phys), dimension(ims:ime,    13),   intent(in) :: fire_MODIS
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) ::     &
          pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
@@ -71,8 +406,7 @@ contains
 
 
     !GSD Chem variables
-    integer,intent(in) ::  num_chem, num_moist, num_ebu_in,                &
-                           plumerise_flag, num_plume_data, num_emis_ant,   &
+    integer,intent(in) ::  num_chem, num_moist,                 &
                            nvl_gocart
     logical,intent(in) ::  call_gocart
     integer,intent(in) ::  ids,ide, jds,jde, kds,kde,                      &
@@ -83,29 +417,19 @@ contains
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme),    intent(out) ::          &
                            backg_oh,backg_h2o2,backg_no3
 
-    real(kind_phys), dimension(ims:ime, jms:jme, num_ebu_in),intent(out) :: ebu_in
-    real(kind_phys), dimension(ims:ime, kms:kemit, jms:jme, num_emis_ant), intent(inout) :: emis_ant
     
     integer,dimension(ims:ime, jms:jme), intent(out) :: isltyp, ivgtyp
-    real(kind_phys), dimension(ims:ime, jms:jme, 3), intent(inout) :: erod
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::              & 
          rri, t_phy, u_phy, v_phy, p_phy, rho_phy, dz8w, p8w, t8w, vvel, zmid,         &
          exch_h,dqdti
     real(kind_phys), dimension(ims:ime, jms:jme),          intent(out) ::              &
          u10, v10, ust, tsk, xland, xlat, xlong, dxy, vegfrac, rmol, gsw, znt, hfx,    &
-         pbl, snowh, clayf, rdrag, sandf, ssm, uthr, dms_0, ttday, tcosz
+         pbl, ttday, tcosz
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, num_moist), intent(out) :: moist
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, num_chem),  intent(out) :: chem
 
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) :: z_at_w, relhum
     real(kind_phys), dimension(ims:ime, nsoil, jms:jme), intent(out) :: smois
-    real(kind_phys), dimension(ims:ime, jms:jme, num_frp_plume), intent(out) :: plumedist
-    real(kind_phys), dimension(ims:ime, jms:jme   ), intent(out) ::                    &
-                   mean_fct_agtf,mean_fct_agef,mean_fct_agsv,mean_fct_aggr,            &
-                   firesize_agtf,firesize_agef,firesize_agsv,firesize_aggr       
-    real(kind_phys), dimension(ims:ime, jms:jme, num_ebu_in) :: emiss_ab
-    real(kind_phys), dimension(ims:ime, jms:jme, num_ebu_in) :: emiss_abu
-    real(kind_phys), dimension(ims:ime, jms:jme, num_plume_data) :: plume
     real(kind_phys), parameter :: frac_so2_ant = 0.5_kind_phys  ! antropogenic so2 fraction
     real(kind_phys), parameter :: frp2plume = 1.e+06_kind_phys  ! FRP-to-plume conversion factor
     real(kind_phys), parameter :: frpc  = 1.e+09_kind_phys      ! FRP conversion factor
@@ -130,7 +454,6 @@ contains
     backg_oh       = 0._kind_phys
     backg_h2o2     = 0._kind_phys 
     backg_no3      = 0._kind_phys
-    ebu_in         = 0._kind_phys
     isltyp         = 0._kind_phys
     ivgtyp         = 0._kind_phys
     rri            = 0._kind_phys
@@ -160,31 +483,12 @@ contains
     znt            = 0._kind_phys
     hfx            = 0._kind_phys
     pbl            = 0._kind_phys
-    snowh          = 0._kind_phys
-    clayf          = 0._kind_phys
-    rdrag          = 0._kind_phys
-    sandf          = 0._kind_phys 
-    ssm            = 0._kind_phys
-    uthr           = 0._kind_phys
-    dms_0          = 0._kind_phys
     ttday          = 0._kind_phys
     tcosz          = 0._kind_phys
     moist          = 0._kind_phys  
     chem           = 0._kind_phys
     z_at_w         = 0._kind_phys
     relhum         = 0._kind_phys
-
-    ! -- initialize fire emissions
-    plume          = 0._kind_phys
-    plumedist      = 0._kind_phys
-    mean_fct_agtf  = 0._kind_phys
-    mean_fct_agef  = 0._kind_phys
-    mean_fct_agsv  = 0._kind_phys
-    mean_fct_aggr  = 0._kind_phys
-    firesize_agtf  = 0._kind_phys
-    firesize_agef  = 0._kind_phys
-    firesize_agsv  = 0._kind_phys
-    firesize_aggr  = 0._kind_phys
 
 
     do i=its,ite
@@ -200,19 +504,9 @@ contains
      znt  (i,1)=zorl(i)*0.01
      hfx  (i,1)=hf2d(i)
      pbl  (i,1)=pb2d(i)
-     snowh(i,1)=snow_cpl(i)*0.001
-     clayf(i,1)=dust_in(i,1)
-     rdrag(i,1)=dust_in(i,2)
-     sandf(i,1)=dust_in(i,3)
-     ssm  (i,1)=dust_in(i,4)
-     uthr (i,1)=dust_in(i,5)
      ivgtyp (i,1)=vegtype(i)
      isltyp (i,1)=soiltyp(i)
      vegfrac(i,1)=sigmaf (i)
-     dms_0(i,1  )=emi_in(i,7) ! --dm0
-     erod (i,1,1)=emi_in(i,8) ! --ero1
-     erod (i,1,2)=emi_in(i,9) ! --ero2
-     erod (i,1,3)=emi_in(i,10)! --ero3
     enddo
    
     rmol=0.
@@ -224,11 +518,6 @@ contains
       enddo
      enddo
     enddo
-
-    if (ktau <= 1) then
-      emis_ant = 0.
-     !emis_vol = 0.
-    end if
 
     do j=jts,jte
       jp = j - jts + 1
@@ -327,106 +616,6 @@ contains
       enddo
     enddo
 
-    ! -- fire
-    emiss_ab  = 0.   ! background
-    emiss_abu = 0.   ! fire emission
-    do j=jts,jte
-     do i=its,ite
-      emiss_ab(i,j,p_e_bc)   =emi_in(i,1)
-      emiss_ab(i,j,p_e_oc)   =emi_in(i,2)
-      emiss_ab(i,j,p_e_sulf) =emi_in(i,3)
-      emiss_ab(i,j,p_e_pm_25)=emi_in(i,4)
-      emiss_ab(i,j,p_e_so2)  =emi_in(i,5)
-      emiss_ab(i,j,p_e_pm_10)=emi_in(i,6)
-     enddo
-    enddo
-
-    !print*,'hli ',plumerise_flag,FIRE_OPT_MODIS,FIRE_OPT_GBBEPx
-    select case (plumerise_flag)
-      case (FIRE_OPT_MODIS)
-        do j=jts,jte
-         do i=its,ite
-          emiss_abu(i,j,p_e_bc)   =fire_MODIS(i,1)
-          emiss_abu(i,j,p_e_oc)   =fire_MODIS(i,2)
-          emiss_abu(i,j,p_e_pm_25)=fire_MODIS(i,3)
-          emiss_abu(i,j,p_e_so2)  =fire_MODIS(i,4)
-          emiss_abu(i,j,p_e_pm_10)=fire_MODIS(i,5)
-          plume(i,j,1)            =fire_MODIS(i,6)
-          plume(i,j,2)            =fire_MODIS(i,7)
-          plume(i,j,3)            =fire_MODIS(i,8)
-          plume(i,j,4)            =fire_MODIS(i,9)
-          plume(i,j,5)            =fire_MODIS(i,10)
-          plume(i,j,6)            =fire_MODIS(i,11)
-          plume(i,j,7)            =fire_MODIS(i,12)
-          plume(i,j,8)            =fire_MODIS(i,13)
-         enddo
-        enddo
-      case (FIRE_OPT_GBBEPx)
-        do j=jts,jte
-         do i=its,ite
-          emiss_abu(i,j,p_e_bc)   =fire_GBBEPx(i,1)
-          emiss_abu(i,j,p_e_oc)   =fire_GBBEPx(i,2)
-          emiss_abu(i,j,p_e_pm_25)=fire_GBBEPx(i,3)
-          emiss_abu(i,j,p_e_so2)  =fire_GBBEPx(i,4)
-          plume(i,j,1)            =fire_GBBEPx(i,5)
-         enddo
-        enddo
-!        print*,'hli GBBEPx plume',maxval(plume(:,:,1))
-      case default
-          ! -- no further option available
-    end select
-
-
-    factor=0.
-    jmax=0
-    jmaxi=0
-    k=kts
-    if (p_bc2 > 1) then
-      do j=jts,jte
-        do i=its,ite
-          emis_ant(i,k,j,p_e_bc)=emiss_ab(i,j,p_e_bc)
-          emis_ant(i,k,j,p_e_oc)=emiss_ab(i,j,p_e_oc) + emiss_ab(i,j,p_e_pm_25)
-          emis_ant(i,k,j,p_e_sulf)=emiss_ab(i,j,p_e_sulf)
-          emis_ant(i,k,j,p_e_so2)=frac_so2_ant * emiss_ab(i,j,p_e_so2)
-          emis_ant(i,k,j,p_e_dms)= 0. !emiss_ab(j,p_e_dms)
-          emis_ant(i,k,j,p_e_pm_25)=emiss_ab(i,j,p_e_pm_25)
-          emis_ant(i,k,j,p_e_pm_10)=emiss_ab(i,j,p_e_pm_10)
-
-
-          ebu_in(i,j,p_ebu_in_pm10)=emiss_abu(i,j,p_e_pm_10)
-          ebu_in(i,j,p_ebu_in_dms)= 0._kind_phys
-
-          select case (plumerise_flag)
-            case (FIRE_OPT_MODIS)
-              ebu_in(i,j,p_ebu_in_oc)   = emiss_abu(i,j,p_e_oc)
-              ebu_in(i,j,p_ebu_in_bc)   = emiss_abu(i,j,p_e_bc)
-              ebu_in(i,j,p_ebu_in_pm25) = emiss_abu(i,j,p_e_pm_25)
-              ebu_in(i,j,p_ebu_in_so2)  = emiss_abu(i,j,p_e_so2)
-              mean_fct_agtf(i,j)=plume(i,j,1)
-              mean_fct_agef(i,j)=plume(i,j,2)
-              mean_fct_agsv(i,j)=plume(i,j,3)
-              mean_fct_aggr(i,j)=plume(i,j,4)
-              firesize_agtf(i,j)=plume(i,j,5)
-              firesize_agef(i,j)=plume(i,j,6)
-              firesize_agsv(i,j)=plume(i,j,7)
-              firesize_aggr(i,j)=plume(i,j,8)
-            case (FIRE_OPT_GBBEPx)
-              ebu_in(i,j,p_ebu_in_oc)   = frpc * (emiss_abu(i,j,p_e_pm_25) - emiss_abu(i,j,p_e_bc))
-              ebu_in(i,j,p_ebu_in_bc)   = frpc * emiss_abu(i,j,p_e_bc)
-              ebu_in(i,j,p_ebu_in_pm25) = frpc * (emiss_abu(i,j,p_e_pm_25) - emiss_abu(i,j,p_e_bc) - emiss_abu(i,j,p_e_oc))
-              ebu_in(i,j,p_ebu_in_so2)  = frpc * emiss_abu(i,j,p_e_so2)
-              plumedist(i,j,p_frp_flam_frac) = flaming(catb(ivgtyp(i,j)))
-              plumedist(i,j,p_frp_mean     ) = frp2plume * plume(i,j,1)
-              plumedist(i,j,p_frp_std      ) = 0.3_kind_phys   * frp2plume * plume(i,j,1)
-              plumedist(i,j,p_frp_mean_size) = msize(ivgtyp(i,j)) * frp2plume * plume(i,j,1)
-              plumedist(i,j,p_frp_std_size ) = 0.5_kind_phys * plumedist(i,j,p_frp_mean_size)
-            case default
-              ! -- no further option available
-          end select
-        enddo
-      enddo
-    endif
-!    print*,'hli plumedist(:,:,p_frp_mean)',maxval(plumedist(:,:,p_frp_mean))
 
  
     do k=kms,kte
@@ -581,52 +770,7 @@ contains
     !endif !restart
 
 
-
-!   emis_ant=0.
-    nv=1
-    k=kts
-    factor2=0.
-    factor=0.
-    if (p_bc2 > 1)then
-      if (chem_opt == CHEM_OPT_GOCART) then
-        do j=jts,jte
-          do i=its,ite
-            factor=dtstep*rri(i,k,j)/dz8w(i,k,j)
-            factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
-            chem(i,k,j,p_bc1)=chem(i,k,j,p_bc1)+emis_ant(i,k,j,p_e_bc)*factor
-            chem(i,k,j,p_oc1)=chem(i,k,j,p_oc1)+emis_ant(i,k,j,p_e_oc)*factor
-            chem(i,k,j,p_p25)=chem(i,k,j,p_p25)+emis_ant(i,k,j,p_e_pm_25)*factor
-            chem(i,k,j,p_p10)=chem(i,k,j,p_p10)+emis_ant(i,k,j,p_e_pm_10)*factor
-            chem(i,k,j,p_sulf)=chem(i,k,j,p_sulf)+emis_ant(i,k,j,p_e_sulf)*factor
-            chem(i,k,j,p_so2)=chem(i,k,j,p_so2)+emis_ant(i,k,j,p_e_so2)*factor2
-          enddo
-        enddo
-      endif
-    else if (p_tr2 > 1)then    !co2 here
-      do j=jts,jte
-        do i=its,ite
-!           factor2=dtstep*rri(i,k,j)/dz8w(i,k,j)
-          !factor2=4.828e-4*dtstep*rri(i,k,j)/(60.*dz8w(i,k,j))
-          !chem(i,k,j,p_tr1)=chem(i,k,j,p_tr1)+emis_ant(i,k,j,p_e_tr1)*factor2
-          !chem(i,k,j,p_tr2)=chem(i,k,j,p_tr2)+emis_ant(i,k,j,p_e_tr2)*factor2
-        enddo
-      enddo
-    else if ((p_tr2 > 1) .and. (p_bc2 > 1))then
-      !call chem_rc_set(CHEM_RC_FAILURE, msg="Inconsistent options detected.", &
-      !  file=__FILE__, line=__LINE__, rc=rc)
-      return
-    endif
-
-    ! -- real-time application, keeping eruption constant
-!
-!    if (ktau <= 2) then
-!      ! -- volcanic emissions
-!      if (num_emis_vol > 0) then
-!         !------------------
-!      end if
-!     end if
-
-      if ((chem_opt == CHEM_OPT_RACM_SOA_VBS) .or. (chem_opt >= CHEM_OPT_GOCART .and. chem_opt < CHEM_OPT_MAX)) then
+    if ((chem_opt == CHEM_OPT_RACM_SOA_VBS) .or. (chem_opt >= CHEM_OPT_GOCART .and. chem_opt < CHEM_OPT_MAX)) then
       !ndystep=86400/ifix(dtstepc)
       ndystep=86400/ifix(dtstep)
       do j=jts,jte
@@ -654,79 +798,7 @@ contains
     endif !chem_opt >= 300 .and. chem_opt <  500
 
 
-  end subroutine gsd_chem_prep_run
+  end subroutine gsd_chem_gocart_prep
 
-
-  SUBROUTINE szangle(imx, jmx, doy, xhour, sza, cossza,xlon,rlat)
-
-!
-! ****************************************************************************
-! **                                                                        **
-! **  This subroutine computes solar zenith angle (SZA):                    **
-! **                                                                        **
-! **      cos(SZA) = sin(LAT)*sin(DEC) + cos(LAT)*cos(DEC)*cos(AHR)         **
-! **                                                                        **
-! **  where LAT is the latitude angle, DEC is the solar declination angle,  **
-! **  and AHR is the hour angle, all in radius.                             **
-! **                                                                        **
-! **  DOY = day-of-year, XHOUR = UT time (hrs).                             **
-! **  XLON = longitude in degree, RLAT = latitude in radian.                **
-! ****************************************************************************
-!
-
-  IMPLICIT NONE
-
-  INTEGER, INTENT(IN)    :: imx, jmx
-  INTEGER, INTENT(IN)    :: doy
-  REAL(kind_phys),    INTENT(IN)    :: xhour
-  REAL(kind_phys),    INTENT(OUT)   :: sza(imx,jmx), cossza(imx,jmx)
-
-  REAL(kind_phys)    :: a0, a1, a2, a3, b1, b2, b3, r, dec, timloc, ahr,xlon,rlat
-  real(kind_phys), parameter :: pi=3.14
-  INTEGER :: i, j
-
-  ! executable statements
-
-  ! ***************************************************************************
-  ! *  Solar declination angle:                                               *
-  ! ***************************************************************************
-  a0 = 0.006918
-  a1 = 0.399912
-  a2 = 0.006758
-  a3 = 0.002697
-  b1 = 0.070257
-  b2 = 0.000907
-  b3 = 0.000148
-  r  = 2.0* pi * REAL(doy-1)/365.0
-  !
-  dec = a0 - a1*COS(  r)   + b1*SIN(  r)   &
-           - a2*COS(2.0*r) + b2*SIN(2.0*r) &
-           - a3*COS(3.0*r) + b3*SIN(3.0*r)
-  !
-  DO i = 1,imx
-     ! ************************************************************************
-     ! *  Hour angle (AHR) is a function of longitude.  AHR is zero at        *
-     ! *  solar noon, and increases by 15 deg for every hour before or        *
-     ! *  after solar noon.                                                   *
-     ! ************************************************************************
-     ! -- Local time in hours
-     timloc  = xhour + xlon/15.0
-     !      IF (timloc < 0.0) timloc = 24.0 + timloc
-     IF (timloc > 24.0) timloc = timloc - 24.0
-     !
-     ! -- Hour angle
-     ahr = ABS(timloc - 12.0) * 15.0 * pi/180.0
-
-     DO j = 1,jmx
-        ! -- Solar zenith angle      
-        cossza(i,j) = SIN(rlat) * SIN(dec) + &
-                      COS(rlat) * COS(dec) * COS(ahr)
-        sza(i,j)    = ACOS(cossza(i,j)) * 180.0/pi
-        IF (cossza(i,j) < 0.0)   cossza(i,j) = 0.0
-        !
-     END do
-  END DO
-
-  END SUBROUTINE szangle
-
- end module gsd_chem_prep
+!> @}
+  end module gsd_chem_gocart_wrapper

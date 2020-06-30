@@ -1,15 +1,15 @@
 [ccpp-arg-table]
-  name = gsd_chem_driver_init
+  name = gsd_chem_dmsemis_wrapper_init
   type = scheme
 
 ########################################################################
 [ccpp-arg-table]
-  name = gsd_chem_driver_finalize
+  name = gsd_chem_dmsemis_wrapper_finalize
   type = scheme
 
 ########################################################################
 [ccpp-arg-table]
-  name = gsd_chem_driver_run
+  name = gsd_chem_dmsemis_wrapper_run
   type = scheme
 [im]
   standard_name = horizontal_loop_extent
@@ -136,24 +136,6 @@
   standard_name = instantaneous_cosine_of_zenith_angle
   long_name = cosine of zenith angle at current time
   units = none
-  dimensions = (horizontal_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-  optional = F
-[rain_cpl]
-  standard_name = lwe_thickness_of_precipitation_amount_for_coupling
-  long_name = total rain precipitation
-  units = m
-  dimensions = (horizontal_dimension)
-  type = real
-  kind = kind_phys
-  intent = in
-  optional = F
-[rainc_cpl]
-  standard_name = lwe_thickness_of_convective_precipitation_amount_for_coupling
-  long_name = total convective precipitation
-  units = m
   dimensions = (horizontal_dimension)
   type = real
   kind = kind_phys
@@ -388,24 +370,6 @@
   kind = kind_phys
   intent = in
   optional = F
-[fire_GBBEPx]
-  standard_name = emission_fire_GBBEPx
-  long_name = emission fire GBBEPx
-  units = various
-  dimensions = (horizontal_dimension,5)
-  type = real
-  kind = kind_phys
-  intent = in
-  optional = F
-[fire_MODIS]
-  standard_name = emission_fire_MODIS
-  long_name = emission fire MODIS
-  units = various
-  dimensions = (horizontal_dimension,13)
-  type = real
-  kind = kind_phys
-  intent = in
-  optional = F
 [nseasalt]
   standard_name = number_of_seasalt_bins_for_diagnostics
   long_name = number of seasalt bins for diagnostics
@@ -587,15 +551,6 @@
   long_name = tracer concentration updated by physics
   units = kg kg-1
   dimensions = (horizontal_dimension,vertical_dimension,number_of_tracers)
-  type = real
-  kind = kind_phys
-  intent = inout
-  optional = F
-[ebu]
-  standard_name = chem_buffer_ebu
-  long_name = chemistry buffer of ebu
-  units = various
-  dimensions = (horizontal_dimension,vertical_dimension_plus_one,1,7)
   type = real
   kind = kind_phys
   intent = inout
