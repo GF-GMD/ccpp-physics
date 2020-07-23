@@ -7,20 +7,9 @@
    use physcons,        only : g => con_g, pi => con_pi
    use machine ,        only : kind_phys
    use gsd_chem_config
-!   use dep_dry_mod
    use dep_wet_ls_mod
-!   use gocart_settling_mod
    use gocart_aerosols_mod
-!   use gocart_dmsemis_mod
-!   use gocart_chem_mod
-!   use opt_mod
-!   use seas_mod,        only : gocart_seasalt_driver
-!   use dust_gocart_mod, only : gocart_dust_driver
-!   use dust_afwa_mod,   only : gocart_dust_afwa_driver
-!   use dust_fengsha_mod,only : gocart_dust_fengsha_driver
    use dust_data_mod
-!   use plume_rise_mod
-!   use vash_settling_mod
 
    implicit none
 
@@ -52,55 +41,45 @@ contains
 !!
 !>\section gsd_chem_lsdep_wrapper GSD Chemistry Scheme General Algorithm
 !> @{
-    subroutine gsd_chem_lsdep_wrapper_run(im, kte, kme, ktau, dt, garea, land, &
-                   u10m, v10m, ustar, rlat, rlon, tskin,julian,xcosz,   &
-                   rain_cpl, rainc_cpl, hf2d, pb2d,                     &
+    subroutine gsd_chem_lsdep_wrapper_run(im, kte, kme, ktau, dt,       &
+                   rain_cpl, rainc_cpl,                                 &
                    pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,  &
-                   w, exch, dqdt,                                       &
-                   nsoil, smc, vegtype, soiltyp, sigmaf,jdate,idat,     & 
-                   dswsfc, zorl,snow_cpl,                               &
-                   nseasalt,ntrac,                                      &
+                   w, dqdt, ntrac,                                      &
                    ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                     &
                    ntbc1,ntbc2,ntoc1,ntoc2,                             &
                    ntss1,ntss2,ntss3,ntss4,ntss5,                       &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
-                   gq0,tile_num,                                    &
+                   gq0,qgrs,tile_num,                                   &
                    errmsg,errflg)
 
     implicit none
 
 
-    integer,        intent(in) :: im,kte,kme,ktau,nsoil,jdate(8),idat(8),tile_num
-    integer,        intent(in) :: nseasalt,ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
+    integer,        intent(in) :: im,kte,kme,ktau,tile_num
+    integer,        intent(in) :: ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
-    real(kind_phys),intent(in) :: dt,julian
+    real(kind_phys),intent(in) :: dt
 
     integer, parameter :: ids=1,jds=1,jde=1, kds=1
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
     integer, parameter :: its=1,jts=1,jte=1, kts=1
 
-    integer, dimension(im), intent(in) :: land, vegtype, soiltyp        
-    real(kind_phys), dimension(im,nsoil), intent(in) :: smc
-    real(kind_phys), dimension(im), intent(in) :: u10m, v10m, ustar,              &
-                garea, rlat,rlon, tskin, rain_cpl, rainc_cpl,                     &
-                hf2d, pb2d, sigmaf, dswsfc, zorl, snow_cpl, xcosz
+    real(kind_phys), dimension(im), intent(in) ::  rain_cpl, rainc_cpl
     real(kind_phys), dimension(im,kme), intent(in) :: ph3d, pr3d
     real(kind_phys), dimension(im,kte), intent(in) :: phl3d, prl3d, tk3d,        &
-                us3d, vs3d, spechum, w, exch, dqdt
-    real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0
-!    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
+                us3d, vs3d, spechum, w, dqdt
+    real(kind_phys), dimension(im,kte,ntrac), intent(inout) :: gq0, qgrs
     character(len=*), intent(out) :: errmsg
     integer,          intent(out) :: errflg
 
-!   integer, parameter :: num_moist=3, num_chem=20, num_emis_seas=5, num_emis_dust=5
     real(kind_phys), dimension(1:im, 1:kme,jms:jme) :: rri, t_phy, u_phy, v_phy,       &
-                     p_phy, z_at_w, dz8w, p8w, t8w, rho_phy, vvel, zmid,        &
-                     exch_h, dqdti
+                     p_phy, z_at_w, dz8w, p8w, t8w, rho_phy, vvel,        &
+                     dqdti
 
-    real(kind_phys), dimension(ims:im, jms:jme) :: u10, v10, ust, tsk,            &
-                     xland, xlat, xlong, dxy, rcav, rnav, hfx, pbl
+    real(kind_phys), dimension(ims:im, jms:jme) ::             &
+                     rcav, rnav
 
 !>- sea salt & chemistry variables
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_moist)  :: moist 
@@ -110,36 +89,11 @@ contains
     real(kind_phys), dimension(ims:im, 1, jms:jme, 1:num_emis_seas  ) :: emis_seas
     real(kind_phys), dimension(ims:im, jms:jme) :: seashelp
 
-    integer :: ide, ime, ite, kde, julday
-
-!   integer, parameter :: SEAS_OPT_DEFAULT = 1
-    integer, parameter :: chem_in_opt = 0  ! 0 for coldstart, 1 for restart
-    logical, parameter :: readrestart = .false.
-   
-!>- dust & chemistry variables
-    real(kind_phys), dimension(ims:im, jms:jme) :: snowh  ! fengsha dust
-    real(kind_phys), dimension(ims:im, jms:jme) :: vegfrac, rmol, gsw, znt
-    real(kind_phys), dimension(ims:im, nsoil, jms:jme) :: smois
-    real(kind_phys), dimension(ims:im, 1:1, jms:jme, 1:num_emis_dust) :: emis_dust
-    real(kind_phys), dimension(ims:im, 1:1, jms:jme, 1:5)             :: srce_dust
-    real(kind_phys), dimension(ims:im, jms:jme) :: dusthelp
-    integer,         dimension(ims:im, jms:jme) :: isltyp, ivgtyp
-
-    integer :: current_month
-
-
-!>- chemical background variables
-
-    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: oh_t, h2o2_t, no3_t
-    real(kind_phys), dimension(ims:im, jms:jme) :: ttday, tcosz
-
-!>- optical variables
-    real(kind_phys), dimension(ims:im, kms:kme, jms:jme) :: relhum
-!>- optical variables
+    integer :: ide, ime, ite, kde
 
 !>- plume variables
     ! -- buffers
-    real(kind_phys) :: dtstep, gmt
+    real(kind_phys) :: dtstep
     real(kind_phys), dimension(1:num_chem) :: ppm2ugkg
 
     ! -- output tracers
@@ -149,7 +103,6 @@ contains
 !>-- local variables
     real(kind_phys) :: curr_secs
     real(kind_phys) :: factor, factor2, factor3
-    logical :: call_gocart, call_radiation
     logical :: store_arrays
     integer :: nbegin, nv, nvv
     integer :: i, j, jp, k, kp, n
@@ -158,10 +111,6 @@ contains
     errmsg = ''
     errflg = 0
 
-    gmt = real(idat(5))
-    julday = real(julian)                                       
-
-    current_month=jdate(2)
     curr_secs = ktau * dt
 
     ! -- set domain
@@ -199,29 +148,20 @@ contains
 
 !>- get ready for chemistry run
     call gsd_chem_prep_lsdep(                                             &
-        readrestart,chem_in_opt,ktau,dtstep,xcosz,                      &
-        u10m,v10m,ustar,land,garea,rlat,rlon,tskin,                     &
+        ktau,dtstep,                      &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,                 &
-        exch,dqdt,                                                      &
-        nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                   &
-        snow_cpl,                                &
-        hf2d,pb2d,                               &
-        u10,v10,ust,tsk,xland,xlat,xlong,dxy,                           &
+        dqdt,                                                      &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                   &
-        t8w,exch_h,dqdti,                                               &
-        z_at_w,vvel,zmid,                                               &
+        t8w,dqdti,                                               &
+        z_at_w,vvel,                                              &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                                &
         ntbc1,ntbc2,ntoc1,ntoc2,                                        &
         ntss1,ntss2,ntss3,ntss4,ntss5,                                  &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                 &
         ntrac,gq0,                                                      &
         num_chem, num_moist,                                 &
-        call_gocart,                                         &
-        ttday,tcosz,gmt,julday,                                         &
         ppm2ugkg,                                              &
         moist,chem,                                    &
-        smois,ivgtyp,isltyp,vegfrac,rmol,gsw,znt,hfx,pbl,               &
-        relhum,snowh,             &
         ids,ide, jds,jde, kds,kde,                                      &
         ims,ime, jms,jme, kms,kme,                                      &
         its,ite, jts,jte, kts,kte)
@@ -273,96 +213,94 @@ contains
      enddo
     enddo
 
-!    print*,'hli test3 ktau',ktau
-!   call gsd_chem_post() ! postprocessing for diagnostics
+    do k=kts,kte
+     do i=its,ite
+       qgrs(i,k,ntso2  )=gq0(i,k,ntso2  )
+       qgrs(i,k,ntsulf )=gq0(i,k,ntsulf )
+       qgrs(i,k,ntdms  )=gq0(i,k,ntdms  )
+       qgrs(i,k,ntmsa  )=gq0(i,k,ntmsa  )
+       qgrs(i,k,ntpp25 )=gq0(i,k,ntpp25 )
+       qgrs(i,k,ntbc1  )=gq0(i,k,ntbc1  )
+       qgrs(i,k,ntbc2  )=gq0(i,k,ntbc2  )
+       qgrs(i,k,ntoc1  )=gq0(i,k,ntoc1  )
+       qgrs(i,k,ntoc2  )=gq0(i,k,ntoc2  )
+       qgrs(i,k,ntdust1)=gq0(i,k,ntdust1)
+       qgrs(i,k,ntdust2)=gq0(i,k,ntdust2)
+       qgrs(i,k,ntdust3)=gq0(i,k,ntdust3)
+       qgrs(i,k,ntdust4)=gq0(i,k,ntdust4)
+       qgrs(i,k,ntdust5)=gq0(i,k,ntdust5)
+       qgrs(i,k,ntss1  )=gq0(i,k,ntss1  )
+       qgrs(i,k,ntss2  )=gq0(i,k,ntss2  )
+       qgrs(i,k,ntss3  )=gq0(i,k,ntss3  )
+       qgrs(i,k,ntss4  )=gq0(i,k,ntss4  )
+       qgrs(i,k,ntss5  )=gq0(i,k,ntss5  )
+       qgrs(i,k,ntpp10 )=gq0(i,k,ntpp10 )
+     enddo
+    enddo
 
 !
    end subroutine gsd_chem_lsdep_wrapper_run
 !> @}
 
   subroutine gsd_chem_prep_lsdep(                                        &
-        readrestart,chem_in_opt,ktau,dtstep,xcosz,                     &
-        u10m,v10m,ustar,land,garea,rlat,rlon,ts2d,                     &
+        ktau,dtstep,                     &
         pr3d,ph3d,phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,                &
-        exch,dqdt,                                                     &
-        nsoil,smc,vegtype,soiltyp,sigmaf,dswsfc,zorl,                  &
-        snow_cpl,                               &
-        hf2d,pb2d,                              &
-        u10,v10,ust,tsk,xland,xlat,xlong,dxy,                          &
+        dqdt,                                                     &
         rri,t_phy,u_phy,v_phy,p_phy,rho_phy,dz8w,p8w,                  &
-        t8w,exch_h,dqdti,                                              &
-        z_at_w,vvel,zmid,                                              &
+        t8w,dqdti,                                              &
+        z_at_w,vvel,                                             &
         ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                               &
         ntbc1,ntbc2,ntoc1,ntoc2,                                       &
         ntss1,ntss2,ntss3,ntss4,ntss5,                                 &
         ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,                &
         ntrac,gq0,                                                     &
         num_chem, num_moist,                                &
-        call_gocart,                                        &
-        ttday,tcosz,gmt,julday,                                        &
         ppm2ugkg,                                             &
         moist,chem,                                   &
-        smois,ivgtyp,isltyp,vegfrac,rmol,gsw,znt,hfx,pbl,              &
-        relhum,snowh,            &
         ids,ide, jds,jde, kds,kde,                                     &
         ims,ime, jms,jme, kms,kme,                                     &
         its,ite, jts,jte, kts,kte)
 
     !Chem input configuration
-    logical, intent(in) :: readrestart
-    integer, intent(in) :: chem_in_opt, ktau, julday
-    real(kind=kind_phys), intent(in) :: dtstep, gmt
+    integer, intent(in) :: ktau
+    real(kind=kind_phys), intent(in) :: dtstep
 
     !FV3 input variables
-    integer, intent(in) :: nsoil
-    integer, dimension(ims:ime), intent(in) :: land, vegtype, soiltyp
     integer, intent(in) :: ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
     integer, intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer, intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
-    real(kind=kind_phys), dimension(ims:ime), intent(in) ::                & 
-         u10m, v10m, ustar, garea, rlat, rlon, ts2d, sigmaf, dswsfc,       &
-         zorl, snow_cpl, hf2d, pb2d,xcosz
-    real(kind=kind_phys), dimension(ims:ime, nsoil),   intent(in) :: smc 
     real(kind=kind_phys), dimension(ims:ime, kms:kme), intent(in) ::     &
          pr3d,ph3d
     real(kind=kind_phys), dimension(ims:ime, kts:kte), intent(in) ::       &
-         phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,exch,dqdt
+         phl3d,tk3d,prl3d,us3d,vs3d,spechum,w,dqdt
     real(kind=kind_phys), dimension(ims:ime, kts:kte,ntrac), intent(in) :: gq0
 
 
     !GSD Chem variables
     integer,intent(in) ::  num_chem, num_moist
-    logical,intent(in) ::  call_gocart
     integer,intent(in) ::  ids,ide, jds,jde, kds,kde,                      &
                            ims,ime, jms,jme, kms,kme,                      &
                            its,ite, jts,jte, kts,kte
 
     real(kind_phys), dimension(num_chem), intent(in) :: ppm2ugkg
     
-    integer,dimension(ims:ime, jms:jme), intent(out) :: isltyp, ivgtyp
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) ::              & 
-         rri, t_phy, u_phy, v_phy, p_phy, rho_phy, dz8w, p8w, t8w, vvel, zmid,         &
-         exch_h,dqdti
-    real(kind_phys), dimension(ims:ime, jms:jme),          intent(out) ::              &
-         u10, v10, ust, tsk, xland, xlat, xlong, dxy, vegfrac, rmol, gsw, znt, hfx,    &
-         pbl, snowh, ttday, tcosz
+         rri, t_phy, u_phy, v_phy, p_phy, rho_phy, dz8w, p8w, t8w, vvel,         &
+         dqdti
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, num_moist), intent(out) :: moist
     real(kind_phys), dimension(ims:ime, kms:kme, jms:jme, num_chem),  intent(out) :: chem
 
-    real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) :: z_at_w, relhum
-    real(kind_phys), dimension(ims:ime, nsoil, jms:jme), intent(out) :: smois
+    real(kind_phys), dimension(ims:ime, kms:kme, jms:jme), intent(out) :: z_at_w
 
     ! -- local variables
 !   real(kind=kind_phys), dimension(ims:ime, kms:kme, jms:jme) :: p_phy
     real(kind_phys) ::  factor,factor2,pu,pl,aln,pwant
-    real(kind_phys) ::  xhour,xmin,gmtp,xlonn,xtime,real_time
+    real(kind_phys) ::  xhour,xmin,xlonn,xtime,real_time
     real(kind_phys), DIMENSION (1,1) :: sza,cosszax
     integer i,ip,j,jp,k,kp,kk,kkp,nv,jmax,jmaxi,l,ll,n,ndystep,ixhour
 
     ! -- initialize output arrays
-    isltyp         = 0._kind_phys
-    ivgtyp         = 0._kind_phys
     rri            = 0._kind_phys
     t_phy          = 0._kind_phys
     u_phy          = 0._kind_phys
@@ -373,60 +311,11 @@ contains
     p8w            = 0._kind_phys
     t8w            = 0._kind_phys
     vvel           = 0._kind_phys
-    zmid           = 0._kind_phys
-    exch_h         = 0._kind_phys
     dqdti          = 0._kind_phys
-    u10            = 0._kind_phys
-    v10            = 0._kind_phys
-    ust            = 0._kind_phys
-    tsk            = 0._kind_phys
-    xland          = 0._kind_phys
-    xlat           = 0._kind_phys
-    xlong          = 0._kind_phys
-    dxy            = 0._kind_phys
-    vegfrac        = 0._kind_phys
-    rmol           = 0._kind_phys
-    gsw            = 0._kind_phys
-    znt            = 0._kind_phys
-    hfx            = 0._kind_phys
-    pbl            = 0._kind_phys
-    snowh          = 0._kind_phys
-    ttday          = 0._kind_phys
-    tcosz          = 0._kind_phys
     moist          = 0._kind_phys  
     chem           = 0._kind_phys
     z_at_w         = 0._kind_phys
-    relhum         = 0._kind_phys
 
-
-    do i=its,ite
-     u10  (i,1)=u10m (i)
-     v10  (i,1)=v10m (i)
-     tsk  (i,1)=ts2d (i)
-     ust  (i,1)=ustar(i)
-     dxy  (i,1)=garea(i)
-     xland(i,1)=real(land(i))
-     xlat (i,1)=rlat(i)*180./pi
-     xlong(i,1)=rlon(i)*180./pi
-     gsw  (i,1)=dswsfc(i)
-     znt  (i,1)=zorl(i)*0.01
-     hfx  (i,1)=hf2d(i)
-     pbl  (i,1)=pb2d(i)
-     snowh(i,1)=snow_cpl(i)*0.001
-     ivgtyp (i,1)=vegtype(i)
-     isltyp (i,1)=soiltyp(i)
-     vegfrac(i,1)=sigmaf (i)
-    enddo
-   
-    rmol=0.
-
-    do k=1,nsoil
-     do j=jts,jte
-      do i=its,ite
-       smois(i,k,j)=smc(i,k)
-      enddo
-     enddo
-    enddo
 
     do j=jts,jte
       jp = j - jts + 1
@@ -486,25 +375,7 @@ contains
             moist(i,k,j,3)=gq0(ip,kkp,p_atm_cldq)
             if(moist(i,k,j,3) < 1.e-8)moist(i,k,j,3)=0.
           endif
-          relhum(i,k,j) = .95
-          relhum(i,k,j) = MIN( .95, moist(i,k,j,1) / &
-            (3.80*exp(17.27*(t_phy(i,k,j)-273.)/ &
-            (t_phy(i,k,j)-36.))/(.01*p_phy(i,k,j))))
-          relhum(i,k,j)=max(0.1,relhum(i,k,j))
           !--
-          zmid(i,k,j)=phl3d(ip,kkp)/g
-        enddo
-      enddo
-    enddo
-
-    ! -- the imported atmospheric heat diffusivity is only available up to kte-1
-    do j=jts,jte
-      jp = j - jts + 1
-      do k=kts,kte-1
-        kkp = k - kts + 1
-        do i=its,ite
-          ip = i - its + 1
-          exch_h(i,k,j)=exch(ip,kkp)
         enddo
       enddo
     enddo
