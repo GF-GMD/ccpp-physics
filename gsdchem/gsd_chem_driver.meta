@@ -12,8 +12,8 @@
   name = gsd_chem_driver_run
   type = scheme
 [im]
-  standard_name = horizontal_loop_extent
-  long_name = horizontal loop extent
+  standard_name = horizontal_dimension
+  long_name = horizontal dimension
   units = count
   dimensions = ()
   type = integer
@@ -608,14 +608,6 @@
   type = integer
   intent = in
   optional = F
-[cplchm_rad_opt]
-  standard_name = flag_for_chemistry_coupling_radiation_feedback
-  long_name = flag controlling cplchm radiation feedback (default off)
-  units = flag
-  dimensions = ()
-  type = logical
-  intent = in
-  optional = F
 [lmk]
   standard_name = adjusted_vertical_layer_dimension_for_radiation
   long_name = number of vertical layers for radiation
@@ -631,6 +623,153 @@
   dimensions = (horizontal_dimension,adjusted_vertical_layer_dimension_for_radiation,14,3)
   type = real
   kind = kind_phys
+  intent = in
+  optional = F
+[chem_opt_in]
+  standard_name = gsd_chem_option
+  long_name = gsd chem option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[kemit_in]
+  standard_name = k_emit_dry_dep
+  long_name = gsd chem k emit dimention for dry deoposition
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[dust_opt_in]
+  standard_name = gsd_chem_dust_opt
+  long_name = gsd chem dust chem option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[dmsemis_opt_in]
+  standard_name = gsd_chem_dms_emis_opt
+  long_name = gsd chem dms emission option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[seas_opt_in]
+  standard_name = gsd_chem_sea_salt_opt
+  long_name = gsd chem sea salt emission option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[biomass_burn_opt_in]
+  standard_name = gsd_chem_biomass_burn_opt
+  long_name = gsd chem biomass burning option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[plumerise_flag_in]
+  standard_name = gsd_chem_plumerise_flag
+  long_name = gsd chem plumerise flag
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[plumerisefire_frq_in]
+  standard_name = gsd_chem_plumerisefire_frq
+  long_name = gsd chem plumerise fire frequency
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[chem_conv_tr_in]
+  standard_name = gsd_chem_conv_tr
+  long_name = gsd chem convective transport option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[dust_alpha_in]
+  standard_name = gsd_chem_dust_alpha
+  long_name = fengsha dust alpha
+  units = none
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[dust_gamma_in]
+  standard_name = gsd_chem_dust_gamma
+  long_name = fengsha dust gamma
+  units = none
+  dimensions = ()
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[dust_uthres_in]
+  standard_name = gsd_chem_dust_uthres
+  long_name = fengsha dust velocity threshold
+  units = none
+  dimensions = (13)
+  type = real
+  kind = kind_phys
+  intent = in
+  optional = F
+[aer_ra_feedback_in]
+  standard_name = gsd_chem_aer_ra_feedback
+  long_name = gsd chem aer radiation feedback option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[aer_ra_frq_in]
+  standard_name = gsd_chem_aer_ra_frq
+  long_name = gsd chem aer radiation frequency
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[chem_in_opt]
+  standard_name = gsd_chem_in_opt
+  long_name = gsd chem coldstart or restart option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[dust_calcdrag_in]
+  standard_name = gsd_chem_dust_calcdrag
+  long_name = gsd chem dust calcdrag
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[wetdep_ls_opt_in]
+  standard_name = gsd_chem_wetdep_ls_opt
+  long_name = gsd chem large scale wet deposition option
+  units = index
+  dimensions = ()
+  type = integer
+  intent = in
+  optional = F
+[cplchm_rad_opt]
+  standard_name = flag_for_chemistry_coupling_radiation_feedback
+  long_name = flag controlling cplchm radiation feedback (default off)
+  units = flag
+  dimensions = ()
+  type = logical
   intent = in
   optional = F
 [errmsg]

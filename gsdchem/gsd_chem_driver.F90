@@ -53,21 +53,26 @@ contains
 !!
 !>\section gsd_chem_driver GSD Chemistry Scheme General Algorithm
 !> @{
-    subroutine gsd_chem_driver_run(im, kte, kme, ktau, dt, garea, land, &
-                   u10m, v10m, ustar, rlat, rlon, tskin,julian,xcosz,   &
-                   rain_cpl, rainc_cpl, hf2d, pb2d,                     &
-                   pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,  &
-                   w, exch, dqdt,                                       &
-                   nsoil, smc, vegtype, soiltyp, sigmaf,jdate,idat,     & 
-                   dswsfc, zorl,snow_cpl,                               &
-                   dust_in,emi_in,emi2_in,fire_GBBEPx,fire_MODIS,       &
-                   nseasalt,ntrac,                                      &
-                   ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                     &
-                   ntbc1,ntbc2,ntoc1,ntoc2,                             &
-                   ntss1,ntss2,ntss3,ntss4,ntss5,                       &
-                   ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,      &
-                   gq0,ebu,tile_num,                                    &
-                   cplchm_rad_opt,lmk,faersw_cpl,                       &
+    subroutine gsd_chem_driver_run(im, kte, kme, ktau, dt, garea, land,         &
+                   u10m, v10m, ustar, rlat, rlon, tskin,julian,xcosz,           &
+                   rain_cpl, rainc_cpl, hf2d, pb2d,                             &
+                   pr3d, ph3d,phl3d, prl3d, tk3d, us3d, vs3d, spechum,          &
+                   w, exch, dqdt,                                               &
+                   nsoil, smc, vegtype, soiltyp, sigmaf,jdate,idat,             & 
+                   dswsfc, zorl,snow_cpl,                                       &
+                   dust_in,emi_in,emi2_in,fire_GBBEPx,fire_MODIS,               &
+                   nseasalt,ntrac,                                              &
+                   ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                             &
+                   ntbc1,ntbc2,ntoc1,ntoc2,                                     &
+                   ntss1,ntss2,ntss3,ntss4,ntss5,                               &
+                   ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,              &
+                   gq0,ebu,tile_num,lmk,faersw_cpl,                             &
+                   chem_opt_in,kemit_in,dust_opt_in,                            &
+                   dmsemis_opt_in,seas_opt_in,biomass_burn_opt_in,              &
+                   plumerise_flag_in,plumerisefire_frq_in,chem_conv_tr_in,      &
+                   dust_alpha_in,dust_gamma_in,dust_uthres_in,                  &
+                   aer_ra_feedback_in,aer_ra_frq_in,chem_in_opt,                &
+                   dust_calcdrag_in,wetdep_ls_opt_in,cplchm_rad_opt,            &
                    errmsg,errflg)
 
     implicit none
@@ -78,7 +83,8 @@ contains
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
-    real(kind_phys),intent(in) :: dt,julian
+    real(kind_phys),intent(in) :: dt,julian,dust_alpha_in,dust_gamma_in
+    real(kind_phys), dimension(13), intent(in) :: dust_uthres_in
 
     integer, parameter :: ids=1,jds=1,jde=1, kds=1
     integer, parameter :: ims=1,jms=1,jme=1, kms=1
@@ -101,6 +107,10 @@ contains
     real(kind_phys), dimension(ims:im, kms:kme, jms:jme, 1:num_ebu), intent(inout) :: ebu
     integer,        intent(in) :: lmk
     real(kind_phys), dimension(im, lmk, 14, 3),intent(inout) :: faersw_cpl
+    integer,        intent(in) :: chem_opt_in,kemit_in,dust_opt_in,dmsemis_opt_in,seas_opt_in
+    integer,        intent(in) :: biomass_burn_opt_in,plumerise_flag_in,plumerisefire_frq_in
+    integer,        intent(in) :: aer_ra_feedback_in,aer_ra_frq_in,chem_in_opt
+    integer,        intent(in) :: dust_calcdrag_in,wetdep_ls_opt_in,chem_conv_tr_in
     logical, intent(in) :: cplchm_rad_opt
 !    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
     character(len=*), intent(out) :: errmsg
@@ -125,7 +135,7 @@ contains
     integer :: ide, ime, ite, kde, julday
 
 !   integer, parameter :: SEAS_OPT_DEFAULT = 1
-    integer, parameter :: chem_in_opt = 0  ! 0 for coldstart, 1 for restart
+!   integer, parameter :: chem_in_opt = 0  ! 0 for coldstart, 1 for restart
     logical, parameter :: readrestart = .false.
     integer, parameter :: nvl_gocart  = 64  ! number of input levels from gocart file
    
@@ -178,7 +188,6 @@ contains
     real(kind_phys), dimension(ims:im, jms:jme, num_frp_plume ) :: plume_frp
     real(kind_phys), dimension(ims:im, kms:kemit, jms:jme, 1:num_emis_ant) :: emis_ant
     real(kind_phys) :: dtstep, gmt
-    integer,parameter :: plumerise_flag = 2  ! 1=MODIS, 2=GBBEPx
     logical :: call_plume, scale_fire_emiss
     logical, save :: firstfire = .true.
     real(kind_phys), dimension(1:num_chem) :: ppm2ugkg
@@ -202,7 +211,23 @@ contains
     errmsg = ''
     errflg = 0
 
-!    print*,'hli test1 ktau',ktau
+    chem_opt          = chem_opt_in
+    kemit             = kemit_in
+    dust_opt          = dust_opt_in
+    dmsemis_opt       = dmsemis_opt_in
+    seas_opt          = seas_opt_in
+    biomass_burn_opt  = biomass_burn_opt_in
+    plumerise_flag    = plumerise_flag_in
+    plumerisefire_frq = plumerisefire_frq_in
+    dust_calcdrag     = dust_calcdrag_in
+    chem_conv_tr      = chem_conv_tr_in
+    aer_ra_feedback   = aer_ra_feedback_in
+    aer_ra_frq        = aer_ra_frq_in
+    wetdep_ls_opt     = wetdep_ls_opt_in
+    dust_uthres       = dust_uthres_in
+
+!   print*,'hli plumerisefire_frq,dust_alpha_in,dust_gamma_in,dust_uthres_in',plumerisefire_frq,dust_alpha_in,dust_gamma_in,dust_uthres_in
+
     h2oai = 0.
     h2oaj = 0.
     nu3   = 0.
@@ -306,7 +331,6 @@ contains
         ids,ide, jds,jde, kds,kde,                                      &
         ims,ime, jms,jme, kms,kme,                                      &
         its,ite, jts,jte, kts,kte)
-!    print*,'hli test2 ktau',ktau
 
 !>- compute sea-salt
     ! -- compute sea salt
@@ -322,8 +346,6 @@ contains
 
     !-- compute dust
     !store_arrays = .false.
-    !print*,'hli dust_opt',dust_opt
-    !print*,'hli DUST_OPT_AFWA',DUST_OPT_AFWA
     select case (dust_opt)
       case (DUST_OPT_AFWA)
         dust_alpha = afwa_alpha
@@ -338,8 +360,8 @@ contains
           its,ite, jts,jte, kts,kte)
        !store_arrays = .true.
       case (DUST_OPT_FENGSHA)
-       dust_alpha    = 2.0  !fengsha_alpha
-       dust_gamma    = 1.8  !fengsha_gamma
+       dust_alpha    = dust_alpha_in  !fengsha_alpha
+       dust_gamma    = dust_gamma_in  !fengsha_gamma
        call gocart_dust_fengsha_driver(dt,chem,rho_phy,smois,p8w,ssm,   &
             isltyp,vegfrac,snowh,xland,dxy,grav,emis_dust,ust,znt,      &
             clayf,sandf,rdrag,uthr,                                     &
@@ -646,7 +668,6 @@ contains
      enddo
     enddo
 
-!    print*,'hli test3 ktau',ktau
 !   call gsd_chem_post() ! postprocessing for diagnostics
 
 !

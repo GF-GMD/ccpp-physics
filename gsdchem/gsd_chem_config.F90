@@ -3,6 +3,7 @@
 ! 01/2020
 ! constant parameters and chemistry configurations and tracers
 ! (This will be splited into three subroutine for configuration, constant and tracers later)
+! 08/2020 move configuration into chem nml
 !
 module gsd_chem_config
 
@@ -14,10 +15,19 @@ module gsd_chem_config
   real(kind=kind_phys), parameter :: epsilc     = 1.e-16
 
   !-- chemistyr module configurations
-  integer, parameter :: chem_opt = 300
-  integer, parameter :: dmsemis_opt = 1
-  integer, parameter :: dust_opt = 5
-  integer, parameter :: seas_opt = 2
+  integer :: chem_opt = 300
+  integer :: kemit = 1
+  integer :: dust_opt = 5
+  integer :: dmsemis_opt = 1
+  integer :: seas_opt = 2
+  integer :: biomass_burn_opt=1
+  integer :: plumerise_flag = 2  ! 1=MODIS, 2=GBBEPx
+  integer :: plumerisefire_frq=60
+  integer :: chem_conv_tr  = 0
+  integer :: aer_ra_feedback=1 !0
+  integer :: aer_ra_frq=60
+  integer :: wetdep_ls_opt = 1
+
   real(kind=kind_phys), parameter :: depo_fact=0.
   integer, parameter :: CHEM_OPT_GOCART= 300
   integer, parameter :: CHEM_OPT_GOCART_RACM  = 301
@@ -43,7 +53,7 @@ module gsd_chem_config
   integer, parameter :: num_ebu            = 7
   integer, parameter :: num_ebu_in         = 7
   integer, parameter :: num_moist=3, num_chem=20, num_emis_seas=5, num_emis_dust=5
-  integer, parameter :: kemit = 1, num_emis_ant = 7
+  integer, parameter :: num_emis_ant = 7
 
   integer, parameter :: SEAS_OPT_DEFAULT = 1
 
@@ -70,13 +80,7 @@ module gsd_chem_config
 
   integer :: numgas = 0
 
-  integer :: chem_conv_tr  = CTRA_OPT_NONE
-  integer :: wetdep_ls_opt = WDLS_OPT_GSD
 
-  integer, parameter :: plumerisefire_frq=60
-  integer, parameter :: biomass_burn_opt=BURN_OPT_ENABLE
-  integer, parameter :: aer_ra_frq=60
-  integer, parameter :: aer_ra_feedback=1 !0
   !integer :: num_plume_data  
 
 
