@@ -14,6 +14,7 @@
    use gocart_aerosols_mod
    use gocart_dmsemis_mod
    use gocart_chem_mod
+   use gocart_diag_mod
    use opt_mod
    use seas_mod,        only : gocart_seasalt_driver
    use dust_gocart_mod, only : gocart_dust_driver
@@ -61,11 +62,12 @@ contains
                    nsoil, smc, vegtype, soiltyp, sigmaf,jdate,idat,             & 
                    dswsfc, zorl,snow_cpl,                                       &
                    dust_in,emi_in,emi2_in,fire_GBBEPx,fire_MODIS,               &
-                   nseasalt,ntrac,                                              &
+                   nseasalt,ndust,ntchmdiag,ntrac,                              &
                    ntso2,ntsulf,ntDMS,ntmsa,ntpp25,                             &
                    ntbc1,ntbc2,ntoc1,ntoc2,                                     &
                    ntss1,ntss2,ntss3,ntss4,ntss5,                               &
                    ntdust1,ntdust2,ntdust3,ntdust4,ntdust5,ntpp10,              &
+                   duem,ssem,abem,aecm,sedimio,drydep,wetdpl,                   &
                    gq0,ebu,tile_num,lmk,faersw_cpl,                             &
                    chem_opt_in,kemit_in,dust_opt_in,                            &
                    dmsemis_opt_in,seas_opt_in,biomass_burn_opt_in,              &
@@ -79,7 +81,8 @@ contains
 
 
     integer,        intent(in) :: im,kte,kme,ktau,nsoil,jdate(8),idat(8),tile_num
-    integer,        intent(in) :: nseasalt,ntrac,ntss1,ntss2,ntss3,ntss4,ntss5
+    integer,        intent(in) :: nseasalt,ndust,ntchmdiag,ntrac
+    integer,        intent(in) :: ntss1,ntss2,ntss3,ntss4,ntss5
     integer,        intent(in) :: ntdust1,ntdust2,ntdust3,ntdust4,ntdust5
     integer,        intent(in) :: ntso2,ntpp25,ntbc1,ntoc1,ntpp10
     integer,        intent(in) :: ntsulf,ntbc2,ntoc2,ntDMS,ntmsa
@@ -112,7 +115,10 @@ contains
     integer,        intent(in) :: aer_ra_feedback_in,aer_ra_frq_in,chem_in_opt
     integer,        intent(in) :: dust_calcdrag_in,wetdep_ls_opt_in,chem_conv_tr_in
     logical, intent(in) :: cplchm_rad_opt
-!    real(kind_phys), dimension(im,nseasalt), intent(inout) :: ssem
+    real(kind_phys), dimension(im,ndust    ), intent(inout) :: duem
+    real(kind_phys), dimension(im,nseasalt ), intent(inout) :: ssem
+    real(kind_phys), dimension(im,6        ), intent(inout) :: abem,aecm
+    real(kind_phys), dimension(im,ntchmdiag), intent(inout) :: sedimio,drydep,wetdpl
     character(len=*), intent(out) :: errmsg
     integer,          intent(out) :: errflg
 
@@ -197,6 +203,12 @@ contains
 !*  real(kind_phys), dimension(ims:im, jms:jme, 1:nvl, 1:nbands) :: ext_cof, sscal, asymp
     real(kind_phys), dimension(ims:im, jms:jme, 1:kme) :: p10, pm25, ebu_oc 
     real(kind_phys), dimension(ims:im, jms:jme, 1:kme) :: oh_bg, h2o2_bg, no3_bg
+
+    ! -- for diagnostics
+    real(kind_phys), dimension(ims:im, jms:jme, 6) :: trcm  ! inst tracer column mass density
+    real(kind_phys), dimension(ims:im, jms:jme, ntchmdiag, 4) :: trdf  ! sedimentaion and dyr/wet deposition
+    real(kind_phys), dimension(im,jme,kte,ntrac) :: gq0_j
+    real(kind_phys), dimension(im,jme,kme) :: pr3d_j
 
 
 !>-- local variables
@@ -667,6 +679,39 @@ contains
        gq0(i,k,ntpp10 )=ppm2ugkg(p_p10   ) * max(epsilc,chem(i,k,1,p_p10))
      enddo
     enddo
+
+    pr3d_j(:,1,:  )=pr3d(:,:  )
+    gq0_j (:,1,:,:)=gq0 (:,:,:)
+    ! -- calculate column mass density
+    call gocart_diag_cmass(chem_opt, nbegin, grav, pr3d_j, gq0_j, trcm)
+
+    ! -- output sedimentation and dry/wet deposition
+    call gocart_diag_store(1, sedim, trdf)
+    ! -- output dry deposition
+    call gocart_diag_store(2, dry_fall, trdf)
+    ! -- output large-scale wet deposition
+    call gocart_diag_store(3, var_rmv, trdf)
+    ! -- output convective-scale wet deposition
+    if (chem_conv_tr == CTRA_OPT_GRELL) then
+      where (tr_fall > kind_phys) wet_dep = tr_fall
+      call gocart_diag_store(4, tr_fall, trdf)
+    end if
+
+    sedimio(:,:)=trdf(:,1,:,1)
+    drydep (:,:)=trdf(:,1,:,2)
+    wetdpl (:,:)=trdf(:,1,:,3)
+
+    duem(:,:)=emis_dust(:,1,1,:)
+    ssem(:,:)=emis_seas(:,1,1,:)
+
+    aecm(:,:)=trcm(:,1,:)
+
+    abem(:,1)=emis_ant(:,kts,1,p_e_bc )
+    abem(:,2)=emis_ant(:,kts,1,p_e_oc )
+    abem(:,3)=emis_ant(:,kts,1,p_e_so2)
+    abem(:,4)=ebu_in  (:,kts,p_ebu_in_bc )
+    abem(:,5)=ebu_in  (:,kts,p_ebu_in_oc )
+    abem(:,6)=ebu_in  (:,kts,p_ebu_in_so2)
 
 !   call gsd_chem_post() ! postprocessing for diagnostics
 

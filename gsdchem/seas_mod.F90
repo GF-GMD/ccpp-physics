@@ -104,7 +104,7 @@ CONTAINS
 
     chem_config=CHEM_OPT_GOCART
 
-!    emis_seas = 0.
+    emis_seas = 0.
 
 !   select case (config % chem_opt)
     select case (chem_opt)
